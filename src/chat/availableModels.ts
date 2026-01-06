@@ -8,6 +8,14 @@ export const AVAILABLE_MODELS = [
     },
   },
   {
+    model: "openai/gpt-5-mini",
+    label: "gpt-5-mini",
+    cost: {
+      prompt: 0.25,
+      completion: 2
+    }
+  },
+  {
     model: "openai/gpt-4o-mini",
     label: "gpt-4o-mini",
     cost: {
@@ -52,8 +60,9 @@ export const AVAILABLE_MODELS = [
 // Cheap models that can use server API key
 export const CHEAP_MODELS = [
   "openai/gpt-4.1-mini",
+  "openai/gpt-5-mini",
   "openai/gpt-4o-mini",
   "google/gemini-2.5-flash",
 ];
 
-export const DEFAULT_MODEL = "openai/gpt-4.1-mini";
+export const DEFAULT_MODEL = "openai/gpt-5-mini";
