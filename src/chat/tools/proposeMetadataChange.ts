@@ -1,5 +1,9 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { QPTool, ToolExecutionContext } from "../types";
+import {
+  validateMetadataChange,
+  formatValidationErrors,
+} from "../../schemas/validateMetadata";
 
 /**
  * Helper function to get a value at a path in an object using dot notation
@@ -81,6 +85,19 @@ export const proposeMetadataChangeTool: QPTool = {
           }),
         };
       }
+    }
+
+    // Validate the proposed change against the DANDI schema
+    const validationResult = validateMetadataChange(path, newValue, metadata);
+    if (!validationResult.valid) {
+      const errorMessage = formatValidationErrors(validationResult.errors);
+      return {
+        result: JSON.stringify({
+          success: false,
+          error: `Schema validation failed: ${errorMessage}`,
+          validationErrors: validationResult.errors,
+        }),
+      };
     }
 
     // Add the pending change

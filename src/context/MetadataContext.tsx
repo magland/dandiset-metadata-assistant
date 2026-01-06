@@ -1,6 +1,16 @@
 import { createContext, useContext, useState, useCallback, type ReactNode } from 'react';
 import type { DandisetVersionInfo, DandisetMetadata, PendingChange } from '../types/dandiset';
 
+/**
+ * Normalize a path to use consistent dot notation for array indices.
+ * Converts "foo[0].bar" to "foo.0.bar" and handles mixed notations.
+ * This ensures paths from the tool (dot notation) match paths from the UI (bracket notation).
+ */
+function normalizePath(path: string): string {
+  // Convert bracket notation [n] to dot notation .n
+  return path.replace(/\[(\d+)\]/g, '.$1');
+}
+
 interface MetadataContextType {
   // Current dandiset info
   dandisetId: string;
@@ -57,16 +67,18 @@ export function MetadataProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const addPendingChange = useCallback((path: string, oldValue: unknown, newValue: unknown) => {
+    const normalizedPath = normalizePath(path);
     setPendingChanges(prev => {
       // Remove existing change for this path if any
-      const filtered = prev.filter(c => c.path !== path);
-      // Add new change
-      return [...filtered, { path, oldValue, newValue }];
+      const filtered = prev.filter(c => c.path !== normalizedPath);
+      // Add new change with normalized path
+      return [...filtered, { path: normalizedPath, oldValue, newValue }];
     });
   }, []);
 
   const removePendingChange = useCallback((path: string) => {
-    setPendingChanges(prev => prev.filter(c => c.path !== path));
+    const normalizedPath = normalizePath(path);
+    setPendingChanges(prev => prev.filter(c => c.path !== normalizedPath));
   }, []);
 
   const clearPendingChanges = useCallback(() => {
@@ -74,7 +86,8 @@ export function MetadataProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const getPendingChangeForPath = useCallback((path: string) => {
-    return pendingChanges.find(c => c.path === path);
+    const normalizedPath = normalizePath(path);
+    return pendingChanges.find(c => c.path === normalizedPath);
   }, [pendingChanges]);
 
   const getModifiedMetadata = useCallback((): DandisetMetadata | null => {

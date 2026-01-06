@@ -1,8 +1,10 @@
-import { FunctionComponent } from "react";
-import { Box, Paper, Typography, Chip } from "@mui/material";
+import { FunctionComponent, useState } from "react";
+import { Box, CircularProgress, Collapse, IconButton, Paper, Typography } from "@mui/material";
 import PersonIcon from "@mui/icons-material/Person";
 import SmartToyIcon from "@mui/icons-material/SmartToy";
 import BuildIcon from "@mui/icons-material/Build";
+import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
+import ExpandLessIcon from "@mui/icons-material/ExpandLess";
 import MarkdownContent from "./MarkdownContent";
 import { ChatMessage, ORContentPart } from "../../chat/types";
 
@@ -24,6 +26,274 @@ const messageContentToString = (
       else return "";
     })
     .join("\n");
+};
+
+/**
+ * Get a short summary for a tool call based on its name and arguments
+ */
+const getToolCallSummary = (
+  name: string,
+  argsString: string
+): string => {
+  try {
+    const args = JSON.parse(argsString);
+    switch (name) {
+      case "fetch_url":
+        return args.url ? `fetch_url: ${args.url}` : "fetch_url";
+      case "propose_metadata_change":
+        return args.path ? `propose_metadata_change: ${args.path}` : "propose_metadata_change";
+      default:
+        return name;
+    }
+  } catch {
+    return name;
+  }
+};
+
+/**
+ * Expandable tool call component
+ */
+interface ToolCallItemProps {
+  name: string;
+  argsString: string;
+  inProgress: boolean;
+}
+
+const ToolCallItem: FunctionComponent<ToolCallItemProps> = ({
+  name,
+  argsString,
+  inProgress,
+}) => {
+  const [expanded, setExpanded] = useState(false);
+  const summary = getToolCallSummary(name, argsString);
+
+  let formattedArgs = argsString;
+  try {
+    formattedArgs = JSON.stringify(JSON.parse(argsString), null, 2);
+  } catch {
+    // Keep original if not valid JSON
+  }
+
+  return (
+    <Box sx={{ mb: 0.5 }}>
+      <Box
+        onClick={() => setExpanded(!expanded)}
+        sx={{
+          display: "inline-flex",
+          alignItems: "center",
+          gap: 0.5,
+          px: 1,
+          py: 0.5,
+          borderRadius: 1,
+          border: 1,
+          borderColor: inProgress ? "warning.main" : "success.main",
+          backgroundColor: inProgress ? "warning.lighter" : "success.lighter",
+          cursor: "pointer",
+          "&:hover": {
+            backgroundColor: inProgress ? "warning.light" : "success.light",
+          },
+          transition: "background-color 0.2s",
+        }}
+      >
+        <BuildIcon
+          sx={{
+            fontSize: 16,
+            color: inProgress ? "warning.dark" : "success.dark",
+          }}
+        />
+        <Typography
+          variant="body2"
+          sx={{
+            color: inProgress ? "warning.dark" : "success.dark",
+            fontFamily: "monospace",
+            fontSize: "0.8rem",
+          }}
+        >
+          {inProgress ? "Calling" : "Called"}: {summary}
+        </Typography>
+        <IconButton
+          size="small"
+          sx={{
+            p: 0,
+            ml: 0.5,
+            color: inProgress ? "warning.dark" : "success.dark",
+          }}
+        >
+          {expanded ? (
+            <ExpandLessIcon sx={{ fontSize: 16 }} />
+          ) : (
+            <ExpandMoreIcon sx={{ fontSize: 16 }} />
+          )}
+        </IconButton>
+      </Box>
+      <Collapse in={expanded}>
+        <Box
+          sx={{
+            mt: 0.5,
+            ml: 2,
+            p: 1,
+            backgroundColor: "grey.50",
+            borderRadius: 1,
+            border: 1,
+            borderColor: "grey.300",
+            maxHeight: 200,
+            overflow: "auto",
+          }}
+        >
+          <Typography
+            component="pre"
+            variant="body2"
+            sx={{
+              fontFamily: "monospace",
+              fontSize: "0.75rem",
+              whiteSpace: "pre-wrap",
+              wordBreak: "break-word",
+              m: 0,
+            }}
+          >
+            {formattedArgs}
+          </Typography>
+        </Box>
+      </Collapse>
+    </Box>
+  );
+};
+
+/**
+ * Truncate content for preview, showing first N characters
+ */
+const truncateContent = (content: string, maxLength: number = 150): string => {
+  if (content.length <= maxLength) return content;
+  return content.substring(0, maxLength).trim() + "...";
+};
+
+/**
+ * Tool result component with expandable content
+ */
+interface ToolResultItemProps {
+  message: ChatMessage & { role: "tool" };
+}
+
+const ToolResultItem: FunctionComponent<ToolResultItemProps> = ({ message }) => {
+  const [expanded, setExpanded] = useState(false);
+
+  // Parse tool result for display
+  let resultContent = message.content;
+  let isSuccess = true;
+  let fullContent = message.content;
+
+  try {
+    const parsed = JSON.parse(message.content);
+    if (parsed.success !== undefined) {
+      isSuccess = parsed.success;
+      resultContent = parsed.message || parsed.error || message.content;
+      // For full content, show the entire parsed result nicely formatted
+      fullContent = JSON.stringify(parsed, null, 2);
+    }
+  } catch {
+    // Keep original content if not JSON
+  }
+
+  const isLongContent = resultContent.length > 150;
+  const previewContent = isLongContent ? truncateContent(resultContent) : resultContent;
+
+  return (
+    <Box
+      sx={{
+        display: "flex",
+        justifyContent: "flex-start",
+        mb: 2,
+        pl: 4,
+      }}
+    >
+      <Paper
+        elevation={0}
+        sx={{
+          p: 1.5,
+          maxWidth: "75%",
+          backgroundColor: isSuccess ? "success.lighter" : "error.lighter",
+          border: 1,
+          borderColor: isSuccess ? "success.light" : "error.light",
+          borderRadius: 1,
+        }}
+      >
+        <Box
+          onClick={() => setExpanded(!expanded)}
+          sx={{
+            display: "flex",
+            alignItems: "flex-start",
+            gap: 1,
+            cursor: "pointer",
+          }}
+        >
+          <BuildIcon
+            sx={{
+              fontSize: 16,
+              mt: 0.3,
+              color: isSuccess ? "success.main" : "error.main",
+            }}
+          />
+          <Box sx={{ flex: 1, minWidth: 0 }}>
+            <Typography
+              variant="body2"
+              sx={{
+                whiteSpace: "pre-wrap",
+                wordBreak: "break-word",
+                color: isSuccess ? "success.dark" : "error.dark",
+              }}
+            >
+              {expanded ? resultContent : previewContent}
+            </Typography>
+          </Box>
+          {isLongContent && (
+            <IconButton
+              size="small"
+              sx={{
+                p: 0,
+                color: isSuccess ? "success.dark" : "error.dark",
+              }}
+            >
+              {expanded ? (
+                <ExpandLessIcon sx={{ fontSize: 16 }} />
+              ) : (
+                <ExpandMoreIcon sx={{ fontSize: 16 }} />
+              )}
+            </IconButton>
+          )}
+        </Box>
+        {expanded && fullContent !== resultContent && (
+          <Collapse in={expanded}>
+            <Box
+              sx={{
+                mt: 1,
+                p: 1,
+                backgroundColor: "grey.50",
+                borderRadius: 1,
+                border: 1,
+                borderColor: "grey.300",
+                maxHeight: 300,
+                overflow: "auto",
+              }}
+            >
+              <Typography
+                component="pre"
+                variant="body2"
+                sx={{
+                  fontFamily: "monospace",
+                  fontSize: "0.75rem",
+                  whiteSpace: "pre-wrap",
+                  wordBreak: "break-word",
+                  m: 0,
+                }}
+              >
+                {fullContent}
+              </Typography>
+            </Box>
+          </Collapse>
+        )}
+      </Paper>
+    </Box>
+  );
 };
 
 const MessageItem: FunctionComponent<MessageItemProps> = ({
@@ -114,22 +384,22 @@ const MessageItem: FunctionComponent<MessageItemProps> = ({
               {hasToolCalls && (
                 <Box sx={{ mt: content ? 1 : 0 }}>
                   {message.tool_calls!.map((toolCall, index) => (
-                    <Chip
+                    <ToolCallItem
                       key={index}
-                      icon={<BuildIcon sx={{ fontSize: 16 }} />}
-                      label={`${inProgress ? "Calling" : "Called"}: ${toolCall.function.name}`}
-                      color={inProgress ? "warning" : "success"}
-                      size="small"
-                      variant="outlined"
-                      sx={{ mr: 1, mb: 0.5 }}
+                      name={toolCall.function.name}
+                      argsString={toolCall.function.arguments}
+                      inProgress={inProgress}
                     />
                   ))}
                 </Box>
               )}
               {inProgress && !content && !hasToolCalls && (
-                <Typography variant="body2" sx={{ fontStyle: "italic", color: "text.secondary" }}>
-                  Thinking...
-                </Typography>
+                <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                  <CircularProgress size={16} />
+                  <Typography variant="body2" sx={{ fontStyle: "italic", color: "text.secondary" }}>
+                    Thinking...
+                  </Typography>
+                </Box>
               )}
             </Box>
           </Box>
@@ -139,61 +409,7 @@ const MessageItem: FunctionComponent<MessageItemProps> = ({
   }
 
   if (message.role === "tool") {
-    // Parse tool result for display
-    let resultContent = message.content;
-    let isSuccess = true;
-    try {
-      const parsed = JSON.parse(message.content);
-      if (parsed.success !== undefined) {
-        isSuccess = parsed.success;
-        resultContent = parsed.message || parsed.error || message.content;
-      }
-    } catch {
-      // Keep original content if not JSON
-    }
-
-    return (
-      <Box
-        sx={{
-          display: "flex",
-          justifyContent: "flex-start",
-          mb: 2,
-          pl: 4,
-        }}
-      >
-        <Paper
-          elevation={0}
-          sx={{
-            p: 1.5,
-            maxWidth: "75%",
-            backgroundColor: isSuccess ? "success.lighter" : "error.lighter",
-            border: 1,
-            borderColor: isSuccess ? "success.light" : "error.light",
-            borderRadius: 1,
-          }}
-        >
-          <Box sx={{ display: "flex", alignItems: "flex-start", gap: 1 }}>
-            <BuildIcon
-              sx={{
-                fontSize: 16,
-                mt: 0.3,
-                color: isSuccess ? "success.main" : "error.main",
-              }}
-            />
-            <Typography
-              variant="body2"
-              sx={{
-                whiteSpace: "pre-wrap",
-                wordBreak: "break-word",
-                color: isSuccess ? "success.dark" : "error.dark",
-              }}
-            >
-              {resultContent}
-            </Typography>
-          </Box>
-        </Paper>
-      </Box>
-    );
+    return <ToolResultItem message={message} />;
   }
 
   return null;

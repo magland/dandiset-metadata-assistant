@@ -1,16 +1,19 @@
 import { useState, useCallback, useRef, useEffect, useMemo } from "react";
 import {
   Box,
+  CircularProgress,
   Typography,
   IconButton,
   Paper,
   Alert,
   Chip,
   Tooltip,
+  Button,
 } from "@mui/material";
 import SmartToyIcon from "@mui/icons-material/SmartToy";
 import SettingsIcon from "@mui/icons-material/Settings";
 import RefreshIcon from "@mui/icons-material/Refresh";
+import StopIcon from "@mui/icons-material/Stop";
 import { useMetadataContext } from "../../context/MetadataContext";
 import useChat from "../../chat/useChat";
 import { CHEAP_MODELS } from "../../chat/availableModels";
@@ -40,6 +43,7 @@ export function ChatPanel() {
     setChatModel,
     error,
     clearChat,
+    abortResponse,
   } = useChat({
     getMetadata,
     addPendingChange,
@@ -117,6 +121,18 @@ export function ChatPanel() {
           Assistant
         </Typography>
         <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+          {responding && (
+            <Button
+              size="small"
+              variant="outlined"
+              color="error"
+              startIcon={<StopIcon />}
+              onClick={abortResponse}
+              sx={{ mr: 1 }}
+            >
+              Stop
+            </Button>
+          )}
           <Chip
             label={chat.model.split("/")[1]}
             size="small"
@@ -235,12 +251,15 @@ export function ChatPanel() {
                     borderTopLeftRadius: 0,
                   }}
                 >
-                  <Typography
-                    variant="body2"
-                    sx={{ fontStyle: "italic", color: "text.secondary" }}
-                  >
-                    Thinking...
-                  </Typography>
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                    <CircularProgress size={16} />
+                    <Typography
+                      variant="body2"
+                      sx={{ fontStyle: "italic", color: "text.secondary" }}
+                    >
+                      Thinking...
+                    </Typography>
+                  </Box>
                 </Paper>
               </Box>
             )}

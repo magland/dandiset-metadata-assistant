@@ -12,6 +12,14 @@ interface MetadataFieldProps {
   depth?: number;
 }
 
+/**
+ * Normalize a path to use consistent dot notation for array indices.
+ * Converts "foo[0].bar" to "foo.0.bar" and handles mixed notations.
+ */
+function normalizePath(path: string): string {
+  return path.replace(/\[(\d+)\]/g, '.$1');
+}
+
 function formatValue(value: unknown): string {
   if (value === null) return 'null';
   if (value === undefined) return 'undefined';
@@ -34,12 +42,20 @@ function isExpandable(value: unknown): boolean {
 }
 
 export function MetadataField({ label, path, value, depth = 0 }: MetadataFieldProps) {
-  const { getPendingChangeForPath, removePendingChange } = useMetadataContext();
+  const { getPendingChangeForPath, removePendingChange, pendingChanges } = useMetadataContext();
   const [isExpanded, setIsExpanded] = useState(depth < 2);
 
+  const normalizedPath = normalizePath(path);
   const pendingChange = getPendingChangeForPath(path);
   const hasChange = !!pendingChange;
-  const expandable = isExpandable(value) || (hasChange && isExpandable(pendingChange.newValue));
+
+  // Check if there are any pending changes for child paths (e.g., relatedResource.0 when we're at relatedResource)
+  const childChanges = pendingChanges.filter(c =>
+    c.path.startsWith(normalizedPath + '.') && c.path !== normalizedPath
+  );
+  const hasChildChanges = childChanges.length > 0;
+
+  const expandable = isExpandable(value) || (hasChange && isExpandable(pendingChange.newValue)) || hasChildChanges;
 
   const handleRevert = () => {
     removePendingChange(path);
@@ -74,19 +90,37 @@ export function MetadataField({ label, path, value, depth = 0 }: MetadataFieldPr
   const renderExpandedContent = () => {
     const displayValue = hasChange ? pendingChange.newValue : value;
 
-    if (Array.isArray(displayValue)) {
+    if (Array.isArray(displayValue) || (Array.isArray(value) && hasChildChanges)) {
+      const baseArray = Array.isArray(displayValue) ? displayValue : (value as unknown[]);
+
+      // Find the highest index from pending child changes to show new items being added
+      let maxIndex = baseArray.length - 1;
+      for (const change of childChanges) {
+        const match = change.path.match(new RegExp(`^${normalizedPath}\\.(\\d+)`));
+        if (match) {
+          const idx = parseInt(match[1], 10);
+          if (idx > maxIndex) maxIndex = idx;
+        }
+      }
+
+      // Generate indices to render (original items + any new pending items)
+      const indicesToRender = Array.from({ length: maxIndex + 1 }, (_, i) => i);
+
       return (
         <Box sx={{ pl: 2, borderLeft: '2px solid', borderColor: 'divider', ml: 1, mt: 1 }}>
-          {displayValue.map((item, index) => (
-            <MetadataField
-              key={index}
-              label={`[${index}]`}
-              path={`${path}[${index}]`}
-              value={item}
-              depth={depth + 1}
-            />
-          ))}
-          {displayValue.length === 0 && (
+          {indicesToRender.map((index) => {
+            const itemValue = index < baseArray.length ? baseArray[index] : undefined;
+            return (
+              <MetadataField
+                key={index}
+                label={`[${index}]`}
+                path={`${path}[${index}]`}
+                value={itemValue}
+                depth={depth + 1}
+              />
+            );
+          })}
+          {indicesToRender.length === 0 && !hasChildChanges && (
             <Typography variant="body2" color="text.secondary" sx={{ fontStyle: 'italic' }}>
               Empty array
             </Typography>
@@ -134,7 +168,7 @@ export function MetadataField({ label, path, value, depth = 0 }: MetadataFieldPr
           variant="body2"
           sx={{
             fontWeight: 500,
-            color: hasChange ? 'primary.main' : 'text.secondary',
+            color: hasChange || hasChildChanges ? 'primary.main' : 'text.secondary',
             minWidth: 120,
             flexShrink: 0,
           }}
@@ -146,8 +180,23 @@ export function MetadataField({ label, path, value, depth = 0 }: MetadataFieldPr
         <Box sx={{ flex: 1, minWidth: 0 }}>
           {hasChange ? (
             <Box>
-              {/* Old value - strikethrough */}
-              {renderValue(pendingChange.oldValue, true)}
+              {/* Old value - strikethrough (or "(new)" for additions) */}
+              {pendingChange.oldValue === undefined ? (
+                <Typography
+                  component="span"
+                  variant="body2"
+                  sx={{
+                    fontFamily: 'monospace',
+                    fontSize: '0.85rem',
+                    color: 'text.secondary',
+                    fontStyle: 'italic',
+                  }}
+                >
+                  (new)
+                </Typography>
+              ) : (
+                renderValue(pendingChange.oldValue, true)
+              )}
               {/* Arrow */}
               <Typography component="span" sx={{ mx: 1, color: 'text.secondary' }}>
                 →

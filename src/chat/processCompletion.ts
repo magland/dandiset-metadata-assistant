@@ -10,6 +10,7 @@ const processCompletion = async (
   tools: QPTool[],
   initialSystemMessage: string,
   toolExecutionContext: ToolExecutionContext,
+  signal?: AbortSignal,
 ): Promise<ChatMessage[]> => {
   const request: CompletionRequest = {
     model: chat.model,
@@ -35,6 +36,7 @@ const processCompletion = async (
     method: "POST",
     headers,
     body: JSON.stringify(request),
+    signal,
   });
 
   if (!response.ok) {
@@ -120,6 +122,7 @@ const processCompletion = async (
       tools,
       initialSystemMessage,
       toolExecutionContext,
+      signal,
     );
 
     return [...ret, ...x];
