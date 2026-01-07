@@ -14,6 +14,7 @@ import SmartToyIcon from "@mui/icons-material/SmartToy";
 import SettingsIcon from "@mui/icons-material/Settings";
 import RefreshIcon from "@mui/icons-material/Refresh";
 import StopIcon from "@mui/icons-material/Stop";
+import DownloadIcon from "@mui/icons-material/Download";
 import { useMetadataContext } from "../../context/MetadataContext";
 import useChat from "../../chat/useChat";
 import { CHEAP_MODELS } from "../../chat/availableModels";
@@ -90,6 +91,49 @@ export function ChatPanel() {
     setNewPrompt("");
   }, [clearChat]);
 
+  const handleDownloadChat = useCallback(() => {
+    const lines: string[] = [];
+    lines.push(`Dandiset Metadata Assistant - Chat Export`);
+    lines.push(`Dandiset: ${dandisetId} (${version})`);
+    lines.push(`Model: ${chat.model}`);
+    lines.push(`Date: ${new Date().toISOString()}`);
+    lines.push(`${"=".repeat(50)}\n`);
+
+    for (const msg of chat.messages) {
+      if (msg.role === "user") {
+        lines.push(`USER:`);
+        lines.push(typeof msg.content === "string" ? msg.content : JSON.stringify(msg.content));
+        lines.push("");
+      } else if (msg.role === "assistant") {
+        lines.push(`ASSISTANT:`);
+        if (msg.content) {
+          lines.push(typeof msg.content === "string" ? msg.content : JSON.stringify(msg.content));
+        }
+        if (msg.tool_calls) {
+          for (const tc of msg.tool_calls) {
+            lines.push(`[Tool Call: ${tc.function.name}]`);
+            lines.push(tc.function.arguments);
+          }
+        }
+        lines.push("");
+      } else if (msg.role === "tool") {
+        lines.push(`TOOL RESULT (${msg.name || msg.tool_call_id}):`);
+        lines.push(msg.content);
+        lines.push("");
+      }
+    }
+
+    const blob = new Blob([lines.join("\n")], { type: "text/plain" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `dandiset-${dandisetId}-chat-${new Date().toISOString().slice(0, 10)}.txt`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }, [chat.messages, chat.model, dandisetId, version]);
+
   const hasMetadata = !!versionInfo?.metadata;
 
   return (
@@ -139,6 +183,17 @@ export function ChatPanel() {
             variant="outlined"
             sx={{ fontSize: "0.7rem" }}
           />
+          <Tooltip title="Download Chat">
+            <span>
+              <IconButton
+                size="small"
+                onClick={handleDownloadChat}
+                disabled={chat.messages.length === 0}
+              >
+                <DownloadIcon fontSize="small" />
+              </IconButton>
+            </span>
+          </Tooltip>
           <Tooltip title="New Chat">
             <span>
               <IconButton
