@@ -5,6 +5,7 @@ import { Chat, ChatMessage, QPTool, ToolExecutionContext } from "./types";
 import { DEFAULT_MODEL } from "./availableModels";
 import { proposeMetadataChangeTool } from "./tools/proposeMetadataChange";
 import { fetchUrlTool } from "./tools/fetchUrl";
+import { lookupOntologyTermTool } from "./tools/lookupOntologyTerm";
 import dandisetSchema from "../schemas/dandiset.schema.json";
 
 const DANDI_METADATA_DOCS_URL =
@@ -97,7 +98,7 @@ const useChat = (options: UseChatOptions) => {
     fetchDocs();
   }, []);
 
-  const tools: QPTool[] = useMemo(() => [proposeMetadataChangeTool, fetchUrlTool], []);
+  const tools: QPTool[] = useMemo(() => [proposeMetadataChangeTool, fetchUrlTool, lookupOntologyTermTool], []);
 
   const toolExecutionContext: ToolExecutionContext = useMemo(
     () => ({
@@ -127,12 +128,20 @@ Your role is to help users understand and improve their dandiset metadata by:
 2. Suggesting improvements or corrections
 3. Proposing specific changes using the propose_metadata_change tool
 4. Fetching information from external URLs using the fetch_url tool
+5. Looking up validated ontology terms for brain regions, anatomy, and diseases using the lookup_ontology_term tool
 
 **CRITICAL RULE - NEVER HALLUCINATE:**
 - When a user asks you to get information from an external URL (article, publication, etc.), you MUST use the fetch_url tool to actually retrieve the content.
 - NEVER fabricate, make up, or guess information from external sources. If you cannot fetch a URL, tell the user.
 - If the fetch_url tool fails or returns an error, inform the user about the failure and do not proceed with fabricated data.
 - Only propose metadata changes based on information you have actually retrieved or that exists in the current metadata.
+
+**SUBJECT MATTER ANNOTATIONS (about field):**
+- When users mention brain regions, anatomical structures, diseases, or disorders, use the lookup_ontology_term tool to find validated ontology terms.
+- NEVER guess or fabricate ontology identifiers (UBERON, DOID, etc.) - always use lookup_ontology_term to get the correct URI.
+- The 'about' field accepts Anatomy (for brain regions/anatomical structures) and Disorder (for diseases/conditions) entries.
+- Each entry requires: schemaKey ("Anatomy" or "Disorder"), identifier (the ontology URI), and name (human-readable label).
+- If multiple matches are found, present the options to the user and let them choose the most appropriate term.
 
 Current context:
 - Dandiset ID: ${dandisetId || "(not loaded)"}

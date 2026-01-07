@@ -29,6 +29,12 @@ const ALLOWED_DOMAINS = [
   "dandiarchive.org",
   "wikipedia.org",
   "crossref.org",
+  // Ontology services
+  "ebi.ac.uk",
+  "ontobee.org",
+  "purl.obolibrary.org",
+  "obofoundry.org",
+  "identifiers.org",
 ];
 
 const isUrlAllowed = (url: string): boolean => {
