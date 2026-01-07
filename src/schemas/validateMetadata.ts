@@ -1,9 +1,9 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import Ajv, { ErrorObject } from "ajv";
+import Ajv, { ErrorObject, ValidateFunction } from "ajv";
 import addFormats from "ajv-formats";
-import dandisetSchema from "./dandiset.schema.json";
+import { fetchSchema, getCachedSchema } from "./schemaService";
 
-// Initialize AJV with the DANDI schema
+// Initialize AJV
 const ajv = new Ajv({
   allErrors: true, // Report all errors, not just the first one
   strict: false, // Allow additional keywords from Pydantic (nskey, etc.)
@@ -13,27 +13,76 @@ const ajv = new Ajv({
 // Add format validators (uri, email, date, etc.)
 addFormats(ajv);
 
-// Compile the full Dandiset schema
-const validateDandiset = ajv.compile(dandisetSchema);
-
-// Extract sub-schemas for individual field types from $defs
-const subSchemas: Record<string, any> = {};
-const defs = (dandisetSchema as any).$defs || {};
-
-// Pre-compile validators for common sub-schemas
-// We need to include the $defs in each sub-schema so $ref works
-for (const [name, schema] of Object.entries(defs)) {
-  try {
-    // Create a schema that includes all $defs so references resolve
-    const schemaWithDefs = {
-      ...(schema as any),
-      $defs: defs,
-    };
-    subSchemas[name] = ajv.compile(schemaWithDefs);
-  } catch (e) {
-    // Some schemas may still fail, skip them
-    console.warn(`Could not compile sub-schema for ${name}:`, e);
+// Cache for compiled validators by schema version
+const validatorCache: Map<
+  string,
+  {
+    validateDandiset: ValidateFunction;
+    subSchemas: Record<string, ValidateFunction>;
+    schema: any;
   }
+> = new Map();
+
+/**
+ * Compile validators for a given schema
+ */
+function compileValidators(schema: any, version: string) {
+  if (validatorCache.has(version)) {
+    return validatorCache.get(version)!;
+  }
+
+  // Compile the full Dandiset schema
+  const validateDandiset = ajv.compile(schema);
+
+  // Extract sub-schemas for individual field types from $defs
+  const subSchemas: Record<string, ValidateFunction> = {};
+  const defs = schema.$defs || {};
+
+  // Pre-compile validators for common sub-schemas
+  for (const [name, subSchema] of Object.entries(defs)) {
+    try {
+      // Create a schema that includes all $defs so references resolve
+      const schemaWithDefs = {
+        ...(subSchema as any),
+        $defs: defs,
+      };
+      subSchemas[name] = ajv.compile(schemaWithDefs);
+    } catch (e) {
+      // Some schemas may still fail, skip them
+      console.warn(`Could not compile sub-schema for ${name}:`, e);
+    }
+  }
+
+  const cached = { validateDandiset, subSchemas, schema };
+  validatorCache.set(version, cached);
+  return cached;
+}
+
+/**
+ * Get validators for a schema version, loading if necessary
+ */
+async function getValidators(schemaVersion?: string) {
+  const schema = await fetchSchema(schemaVersion);
+  const version = schemaVersion || "default";
+  return compileValidators(schema, version);
+}
+
+/**
+ * Get validators synchronously from cache (returns undefined if not cached)
+ */
+function getValidatorsSync(schemaVersion?: string) {
+  const version = schemaVersion || "default";
+  if (validatorCache.has(version)) {
+    return validatorCache.get(version)!;
+  }
+
+  // Try to get cached schema and compile
+  const schema = getCachedSchema(schemaVersion);
+  if (schema) {
+    return compileValidators(schema, version);
+  }
+
+  return undefined;
 }
 
 /**
@@ -54,7 +103,9 @@ export interface ValidationError {
 /**
  * Convert AJV errors to a more user-friendly format
  */
-function formatErrors(errors: ErrorObject[] | null | undefined): ValidationError[] {
+function formatErrors(
+  errors: ErrorObject[] | null | undefined
+): ValidationError[] {
   if (!errors) return [];
 
   return errors.map((err) => ({
@@ -96,8 +147,18 @@ export function getSchemaTypeForPath(path: string): string | null {
  */
 export function validateAgainstSubSchema(
   schemaName: string,
-  value: any
+  value: any,
+  schemaVersion?: string
 ): ValidationResult {
+  const validators = getValidatorsSync(schemaVersion);
+  if (!validators) {
+    return {
+      valid: true,
+      errors: [],
+    };
+  }
+
+  const { subSchemas } = validators;
   const validator = subSchemas[schemaName];
 
   if (!validator) {
@@ -106,7 +167,7 @@ export function validateAgainstSubSchema(
       const schemaNames = schemaName.split("|");
       // Try each schema in the union
       for (const name of schemaNames) {
-        const result = validateAgainstSubSchema(name.trim(), value);
+        const result = validateAgainstSubSchema(name.trim(), value, schemaVersion);
         if (result.valid) {
           return result;
         }
@@ -156,6 +217,16 @@ export function validateMetadataChange(
   newValue: any,
   currentMetadata?: any
 ): ValidationResult {
+  const schemaVersion = currentMetadata?.schemaVersion;
+  const validators = getValidatorsSync(schemaVersion);
+
+  if (!validators) {
+    // Schema not loaded yet, skip validation
+    return { valid: true, errors: [] };
+  }
+
+  const { validateDandiset } = validators;
+
   // Determine if this is an array item or object field
   const pathParts = path.split(".");
   const rootField = pathParts[0];
@@ -170,7 +241,7 @@ export function validateMetadataChange(
     if (schemaType) {
       // If the value is an object, validate against the sub-schema
       if (typeof newValue === "object" && newValue !== null) {
-        return validateAgainstSubSchema(schemaType, newValue);
+        return validateAgainstSubSchema(schemaType, newValue, schemaVersion);
       }
     }
   }
@@ -193,7 +264,7 @@ export function validateMetadataChange(
         newValue
       );
 
-      return validateAgainstSubSchema(schemaType, newElement);
+      return validateAgainstSubSchema(schemaType, newElement, schemaVersion);
     }
   }
 
@@ -250,13 +321,78 @@ function applyNestedChange(obj: any, pathParts: string[], value: any): any {
 
 /**
  * Validate an entire metadata object against the Dandiset schema
+ * Always validates against the latest schema version (ignores metadata.schemaVersion)
  */
-export function validateFullMetadata(metadata: any): ValidationResult {
+export function validateFullMetadata(
+  metadata: any,
+  schemaVersion?: string
+): ValidationResult {
+  // Always use the default (latest) schema version for validation
+  const validators = getValidatorsSync(schemaVersion);
+
+  if (!validators) {
+    // Schema not loaded yet - return a special error to indicate this
+    return {
+      valid: false,
+      errors: [
+        {
+          path: "/",
+          message: "Schema not loaded yet. Please wait and try again.",
+          keyword: "schema-loading",
+        },
+      ],
+    };
+  }
+
+  const { validateDandiset } = validators;
   const valid = validateDandiset(metadata);
   return {
     valid: valid as boolean,
     errors: formatErrors(validateDandiset.errors),
   };
+}
+
+/**
+ * Async version of validateFullMetadata that ensures schema is loaded
+ * Always validates against the latest schema version (ignores metadata.schemaVersion)
+ */
+export async function validateFullMetadataAsync(
+  metadata: any,
+  schemaVersion?: string
+): Promise<ValidationResult> {
+  // Always use the default (latest) schema version for validation
+  const validators = await getValidators(schemaVersion);
+
+  const { validateDandiset } = validators;
+  const valid = validateDandiset(metadata);
+  return {
+    valid: valid as boolean,
+    errors: formatErrors(validateDandiset.errors),
+  };
+}
+
+/**
+ * Initialize validators for a schema version (call this early to preload)
+ */
+export async function initializeValidators(
+  schemaVersion?: string
+): Promise<void> {
+  await getValidators(schemaVersion);
+}
+
+/**
+ * Get the raw schema object (async)
+ */
+export async function getSchema(schemaVersion?: string): Promise<any> {
+  return await fetchSchema(schemaVersion);
+}
+
+/**
+ * Get the raw schema object (sync, returns undefined if not loaded)
+ */
+export function getSchemaSync(schemaVersion?: string): any | undefined {
+  const validators = getValidatorsSync(schemaVersion);
+  return validators?.schema;
 }
 
 /**
@@ -276,7 +412,10 @@ export function formatValidationErrors(errors: ValidationError[]): string {
       if (err.keyword === "required" && err.params?.missingProperty) {
         msg = `Missing required property: ${err.params.missingProperty}`;
       }
-      if (err.keyword === "additionalProperties" && err.params?.additionalProperty) {
+      if (
+        err.keyword === "additionalProperties" &&
+        err.params?.additionalProperty
+      ) {
         msg = `Unknown property: ${err.params.additionalProperty}`;
       }
 

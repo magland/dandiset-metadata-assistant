@@ -1,5 +1,6 @@
-import { createContext, useContext, useState, useCallback, type ReactNode } from 'react';
+import { createContext, useContext, useState, useCallback, useEffect, type ReactNode } from 'react';
 import type { DandisetVersionInfo, DandisetMetadata, PendingChange } from '../types/dandiset';
+import { preloadSchema } from '../schemas/schemaService';
 
 /**
  * Normalize a path to use consistent dot notation for array indices.
@@ -65,6 +66,15 @@ export function MetadataProvider({ children }: { children: ReactNode }) {
     }
     setApiKeyState(key);
   }, []);
+
+  // Preload JSON schema (always use latest version for validation)
+  useEffect(() => {
+    if (versionInfo) {
+      preloadSchema().catch((err) => {
+        console.warn('Failed to preload schema:', err);
+      });
+    }
+  }, [versionInfo]);
 
   const addPendingChange = useCallback((path: string, oldValue: unknown, newValue: unknown) => {
     const normalizedPath = normalizePath(path);

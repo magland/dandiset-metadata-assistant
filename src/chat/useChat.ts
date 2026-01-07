@@ -6,7 +6,7 @@ import { DEFAULT_MODEL } from "./availableModels";
 import { proposeMetadataChangeTool } from "./tools/proposeMetadataChange";
 import { fetchUrlTool } from "./tools/fetchUrl";
 import { lookupOntologyTermTool } from "./tools/lookupOntologyTerm";
-import dandisetSchema from "../schemas/dandiset.schema.json";
+import { fetchSchema } from "../schemas/schemaService";
 
 const DANDI_METADATA_DOCS_URL =
   "https://raw.githubusercontent.com/dandi/dandi-docs/refs/heads/master/docs/user-guide-sharing/dandiset-metadata.md";
@@ -86,6 +86,7 @@ const useChat = (options: UseChatOptions) => {
   const [partialResponse, setPartialResponse] = useState<ChatMessage[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [metadataDocs, setMetadataDocs] = useState<string | null>(null);
+  const [dandisetSchema, setDandisetSchema] = useState<any>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
 
   // Fetch DANDI metadata documentation on mount
@@ -103,6 +104,22 @@ const useChat = (options: UseChatOptions) => {
     };
     fetchDocs();
   }, []);
+
+  // Fetch DANDI JSON schema (always use latest version)
+  useEffect(() => {
+    const loadSchema = async () => {
+      // Always use the default (latest) schema version
+      if (!dandisetSchema) {
+        try {
+          const schema = await fetchSchema();
+          setDandisetSchema(schema);
+        } catch (err) {
+          console.warn("Failed to fetch DANDI schema:", err);
+        }
+      }
+    };
+    loadSchema();
+  }, [dandisetSchema]);
 
   const tools: QPTool[] = useMemo(() => [proposeMetadataChangeTool, fetchUrlTool, lookupOntologyTermTool], []);
 
@@ -149,6 +166,14 @@ Your role is to help users understand and improve their dandiset metadata by:
 - Each entry requires: schemaKey ("Anatomy", "Disorder", or "GenericType"), identifier (the ontology URI), and name (human-readable label).
 - If multiple matches are found, present the options to the user and let them choose the most appropriate term.
 
+**CONTRIBUTOR INFORMATION FROM PUBLICATIONS:**
+- When adding contributors from a paper with a DOI, use the OpenAlex API to get detailed author information.
+- Fetch from: https://api.openalex.org/works/doi:{DOI} (e.g., https://api.openalex.org/works/doi:10.1016/j.neuron.2016.12.011)
+- The OpenAlex response includes authorships with: author name, ORCID identifier, and institutional affiliations with ROR IDs.
+- Use this data to populate contributor fields including: name, identifier (ORCID URL), and affiliation (with ROR identifier).
+- ORCID format: https://orcid.org/0000-0000-0000-0000
+- ROR format: https://ror.org/XXXXXXX
+
 Current context:
 - Dandiset ID: ${dandisetId || "(not loaded)"}
 - Version: ${version || "(not loaded)"}
@@ -186,9 +211,9 @@ Key points:
 - Check \`required\` arrays to see which fields are mandatory
 - Reference \`$defs\` for nested object type definitions
 
-\`\`\`json
+${dandisetSchema ? `\`\`\`json
 ${JSON.stringify(dandisetSchema, null, 2)}
-\`\`\`
+\`\`\`` : "(Schema not yet loaded)"}
 
 Available tools:
 `);
@@ -199,7 +224,7 @@ Available tools:
     }
 
     return parts.join("\n\n");
-  }, [getMetadata, dandisetId, version, tools, metadataDocs]);
+  }, [getMetadata, dandisetId, version, tools, metadataDocs, dandisetSchema]);
 
   const generateResponse = useCallback(
     async (currentChat: Chat) => {

@@ -1,12 +1,16 @@
-import { Box, Typography, CircularProgress } from '@mui/material';
+import { useState } from 'react';
+import { Box, Typography, CircularProgress, IconButton, Tooltip } from '@mui/material';
 import DescriptionIcon from '@mui/icons-material/Description';
+import EditIcon from '@mui/icons-material/Edit';
 import { useMetadataContext } from '../../context/MetadataContext';
 import { DandisetInfo } from './DandisetInfo';
 import { MetadataDisplay } from './MetadataDisplay';
 import { CommitButton } from '../Controls/CommitButton';
+import { JsonEditorDialog } from './JsonEditorDialog';
 
 export function MetadataPanel() {
   const { versionInfo, isLoading } = useMetadataContext();
+  const [editorOpen, setEditorOpen] = useState(false);
 
   return (
     <Box
@@ -35,7 +39,20 @@ export function MetadataPanel() {
           <DescriptionIcon color="primary" />
           Metadata
         </Typography>
-        <CommitButton />
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          {versionInfo && (
+            <Tooltip title="Edit JSON directly">
+              <IconButton
+                onClick={() => setEditorOpen(true)}
+                size="small"
+                color="primary"
+              >
+                <EditIcon />
+              </IconButton>
+            </Tooltip>
+          )}
+          <CommitButton />
+        </Box>
       </Box>
 
       {/* Content */}
@@ -80,6 +97,12 @@ export function MetadataPanel() {
           </Box>
         )}
       </Box>
+
+      {/* JSON Editor Dialog */}
+      <JsonEditorDialog
+        open={editorOpen}
+        onClose={() => setEditorOpen(false)}
+      />
     </Box>
   );
 }
