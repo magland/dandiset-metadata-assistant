@@ -103,3 +103,53 @@ export function clearSchemaCache(): void {
 export function getDefaultSchemaVersion(): string {
   return DEFAULT_SCHEMA_VERSION;
 }
+
+/**
+ * Extract all top-level readOnly field names from the schema
+ */
+export function getReadOnlyFields(schema: any): Set<string> {
+  const readOnlyFields = new Set<string>();
+
+  if (!schema?.properties) {
+    return readOnlyFields;
+  }
+
+  for (const [fieldName, fieldDef] of Object.entries(schema.properties)) {
+    if ((fieldDef as any)?.readOnly === true) {
+      readOnlyFields.add(fieldName);
+    }
+  }
+
+  return readOnlyFields;
+}
+
+/**
+ * Get readOnly fields from the cached schema (sync)
+ */
+export function getReadOnlyFieldsSync(): Set<string> {
+  const schema = getCachedSchema();
+  if (!schema) {
+    return new Set();
+  }
+  return getReadOnlyFields(schema);
+}
+
+/**
+ * Remove readOnly fields from a metadata object
+ */
+export function filterOutReadOnlyFields(metadata: any, schema: any): any {
+  if (!metadata || typeof metadata !== "object") {
+    return metadata;
+  }
+
+  const readOnlyFields = getReadOnlyFields(schema);
+  const filtered: any = {};
+
+  for (const [key, value] of Object.entries(metadata)) {
+    if (!readOnlyFields.has(key)) {
+      filtered[key] = value;
+    }
+  }
+
+  return filtered;
+}

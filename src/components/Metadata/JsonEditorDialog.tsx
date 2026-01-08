@@ -16,10 +16,30 @@ import {
   validateFullMetadataAsync,
   formatValidationErrors,
 } from "../../schemas/validateMetadata";
+import {
+  getCachedSchema,
+  getReadOnlyFields,
+} from "../../schemas/schemaService";
 
 interface JsonEditorDialogProps {
   open: boolean;
   onClose: () => void;
+}
+
+/**
+ * Filter out readOnly fields from metadata for editing
+ */
+function filterEditableFields(
+  metadata: Record<string, unknown>,
+  readOnlyFields: Set<string>
+): Record<string, unknown> {
+  const filtered: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(metadata)) {
+    if (!readOnlyFields.has(key)) {
+      filtered[key] = value;
+    }
+  }
+  return filtered;
 }
 
 /**
@@ -107,13 +127,25 @@ export function JsonEditorDialog({ open, onClose }: JsonEditorDialogProps) {
   const [validationErrors, setValidationErrors] = useState<string | null>(null);
   const [isValidating, setIsValidating] = useState(false);
   const [changeCount, setChangeCount] = useState(0);
+  const [readOnlyFields, setReadOnlyFields] = useState<Set<string>>(new Set());
 
-  // Initialize JSON text when dialog opens
+  // Initialize JSON text when dialog opens (filter out readOnly fields)
   useEffect(() => {
     if (open && versionInfo) {
       const currentMetadata = getModifiedMetadata();
       if (currentMetadata) {
-        setJsonText(JSON.stringify(currentMetadata, null, 2));
+        // Get readOnly fields from schema
+        const schema = getCachedSchema();
+        const roFields = schema ? getReadOnlyFields(schema) : new Set<string>();
+        setReadOnlyFields(roFields);
+
+        // Filter out readOnly fields for editing
+        const editableMetadata = filterEditableFields(
+          currentMetadata as unknown as Record<string, unknown>,
+          roFields
+        );
+
+        setJsonText(JSON.stringify(editableMetadata, null, 2));
         setParseError(null);
         setValidationErrors(null);
         setChangeCount(0);
@@ -132,17 +164,25 @@ export function JsonEditorDialog({ open, onClose }: JsonEditorDialogProps) {
         const parsed = JSON.parse(text);
         setParseError(null);
 
-        // Count changes first (sync operation)
+        // Count changes against filtered original (sync operation)
         const original = versionInfo?.metadata;
         if (original) {
-          const diffs = generateDiffs(original, parsed);
+          const filteredOriginal = filterEditableFields(
+            original as unknown as Record<string, unknown>,
+            readOnlyFields
+          );
+          const diffs = generateDiffs(filteredOriginal, parsed);
           setChangeCount(diffs.length);
         }
 
         // Validate against schema (async to ensure schema is loaded)
+        // Add back readOnly fields from original for validation
         setIsValidating(true);
         try {
-          const validation = await validateFullMetadataAsync(parsed);
+          const fullMetadata = original
+            ? { ...original, ...parsed }
+            : parsed;
+          const validation = await validateFullMetadataAsync(fullMetadata);
           if (!validation.valid) {
             setValidationErrors(formatValidationErrors(validation.errors));
           } else {
@@ -159,7 +199,7 @@ export function JsonEditorDialog({ open, onClose }: JsonEditorDialogProps) {
         setChangeCount(0);
       }
     },
-    [versionInfo]
+    [versionInfo, readOnlyFields]
   );
 
   // Apply changes
@@ -168,13 +208,16 @@ export function JsonEditorDialog({ open, onClose }: JsonEditorDialogProps) {
 
     try {
       const newMetadata = JSON.parse(jsonText);
-      const original = versionInfo.metadata;
+      const original = versionInfo.metadata as unknown as Record<string, unknown>;
+
+      // Filter original to only editable fields for comparison
+      const filteredOriginal = filterEditableFields(original, readOnlyFields);
 
       // Clear existing pending changes and apply new ones
       clearPendingChanges();
 
-      // Generate diffs and add as pending changes
-      const diffs = generateDiffs(original, newMetadata);
+      // Generate diffs and add as pending changes (only for editable fields)
+      const diffs = generateDiffs(filteredOriginal, newMetadata);
       for (const diff of diffs) {
         addPendingChange(diff.path, diff.oldValue, diff.newValue);
       }
@@ -189,20 +232,25 @@ export function JsonEditorDialog({ open, onClose }: JsonEditorDialogProps) {
     jsonText,
     parseError,
     versionInfo,
+    readOnlyFields,
     clearPendingChanges,
     addPendingChange,
     onClose,
   ]);
 
-  // Reset to original
+  // Reset to original (filtered)
   const handleReset = useCallback(() => {
     if (versionInfo?.metadata) {
-      setJsonText(JSON.stringify(versionInfo.metadata, null, 2));
+      const editableMetadata = filterEditableFields(
+        versionInfo.metadata as unknown as Record<string, unknown>,
+        readOnlyFields
+      );
+      setJsonText(JSON.stringify(editableMetadata, null, 2));
       setParseError(null);
       setValidationErrors(null);
       setChangeCount(0);
     }
-  }, [versionInfo]);
+  }, [versionInfo, readOnlyFields]);
 
   const canApply = !parseError && !validationErrors && !isValidating && changeCount > 0;
 
@@ -223,7 +271,7 @@ export function JsonEditorDialog({ open, onClose }: JsonEditorDialogProps) {
           alignItems: "center",
         }}
       >
-        <Typography variant="h6">Edit Metadata JSON</Typography>
+        <Typography variant="h6">Edit Metadata JSON (editable fields only)</Typography>
         <IconButton onClick={onClose} size="small">
           <CloseIcon />
         </IconButton>

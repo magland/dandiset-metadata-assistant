@@ -4,6 +4,7 @@ import {
   validateMetadataChange,
   formatValidationErrors,
 } from "../../schemas/validateMetadata";
+import { getReadOnlyFieldsSync } from "../../schemas/schemaService";
 
 /**
  * Helper function to get a value at a path in an object using dot notation
@@ -65,6 +66,18 @@ export const proposeMetadataChangeTool: QPTool = {
         result: JSON.stringify({
           success: false,
           error: "No metadata is currently loaded. Please load a dandiset first.",
+        }),
+      };
+    }
+
+    // Check if the field is readOnly
+    const rootField = path.split(".")[0];
+    const readOnlyFields = getReadOnlyFieldsSync();
+    if (readOnlyFields.has(rootField)) {
+      return {
+        result: JSON.stringify({
+          success: false,
+          error: `The field "${rootField}" is read-only and cannot be modified. Read-only fields are automatically managed by the DANDI system.`,
         }),
       };
     }
@@ -136,6 +149,11 @@ export const proposeMetadataChangeTool: QPTool = {
 **Notes:**
 - Changes are not applied immediately; they are added to a pending changes list
 - Users can review all pending changes before committing them
-- The old value (if any) will be preserved for diff display`;
+- The old value (if any) will be preserved for diff display
+
+**Read-only fields (cannot be modified):**
+The following fields are managed by the DANDI system and cannot be changed:
+id, schemaVersion, url, repository, identifier, dateCreated, dateModified,
+citation, assetsSummary, manifestLocation, version, access`;
   },
 };
