@@ -24,6 +24,7 @@ import { getStoredOpenRouterApiKey } from "../../chat/apiKeyStorage";
 import ChatInput from "./ChatInput";
 import MessageItem from "./MessageItem";
 import ChatSettingsDialog from "./ChatSettingsDialog";
+import SuggestedPrompts from "./SuggestedPrompts";
 
 export function ChatPanel() {
   const {
@@ -48,6 +49,8 @@ export function ChatPanel() {
     clearChat,
     abortResponse,
     revertToMessage,
+    currentSuggestions,
+    loadingInitialSuggestions,
   } = useChat({
     getMetadata,
     addPendingChange,
@@ -386,6 +389,38 @@ export function ChatPanel() {
           This model requires an OpenRouter API key. Click settings to add one
           or switch to a free model.
         </Alert>
+      )}
+
+      {/* Suggested Prompts */}
+      {hasMetadata && !responding && !needsApiKey && (
+        <SuggestedPrompts
+          suggestions={currentSuggestions}
+          onSuggestionClick={(suggestion) => {
+            submitUserMessage(suggestion);
+          }}
+          disabled={responding || loadingInitialSuggestions}
+        />
+      )}
+
+      {/* Loading Initial Suggestions Indicator */}
+      {hasMetadata && loadingInitialSuggestions && allMessages.length === 0 && (
+        <Box
+          sx={{
+            display: "flex",
+            alignItems: "center",
+            gap: 1,
+            px: 2,
+            py: 1,
+            borderTop: 1,
+            borderColor: "divider",
+            backgroundColor: "grey.50",
+          }}
+        >
+          <CircularProgress size={14} />
+          <Typography variant="body2" color="text.secondary" sx={{ fontSize: "0.75rem" }}>
+            Loading suggestions...
+          </Typography>
+        </Box>
       )}
 
       {/* Input Area */}

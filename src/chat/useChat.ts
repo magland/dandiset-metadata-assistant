@@ -7,6 +7,8 @@ import { proposeMetadataChangeTool } from "./tools/proposeMetadataChange";
 import { fetchUrlTool } from "./tools/fetchUrl";
 import { lookupOntologyTermTool } from "./tools/lookupOntologyTerm";
 import { fetchSchema } from "../schemas/schemaService";
+import { parseSuggestions } from "./parseSuggestions";
+import { getStoredOpenRouterApiKey } from "./apiKeyStorage";
 
 const DANDI_METADATA_DOCS_URL =
   "https://raw.githubusercontent.com/dandi/dandi-docs/refs/heads/master/docs/user-guide-sharing/dandiset-metadata.md";
@@ -87,7 +89,10 @@ const useChat = (options: UseChatOptions) => {
   const [error, setError] = useState<string | null>(null);
   const [metadataDocs, setMetadataDocs] = useState<string | null>(null);
   const [dandisetSchema, setDandisetSchema] = useState<any>(null);
+  const [initialSuggestions, setInitialSuggestions] = useState<string[]>([]);
+  const [loadingInitialSuggestions, setLoadingInitialSuggestions] = useState<boolean>(false);
   const abortControllerRef = useRef<AbortController | null>(null);
+  const initialSuggestionsRequestedForRef = useRef<string | null>(null);
 
   // Fetch DANDI metadata documentation on mount
   useEffect(() => {
@@ -173,6 +178,17 @@ Your role is to help users understand and improve their dandiset metadata by:
 - Use this data to populate contributor fields including: name, identifier (ORCID URL), and affiliation (with ROR identifier).
 - ORCID format: https://orcid.org/0000-0000-0000-0000
 - ROR format: https://ror.org/XXXXXXX
+
+**SUGGESTED PROMPTS:**
+- You can include suggested follow-up prompts for the user in any of your responses
+- Use a special code block with the language tag "suggestions" containing a JSON array of 3 short prompts
+- Example:
+\`\`\`suggestions
+["Suggest keywords", "Review contributors", "Improve description"]
+\`\`\`
+- Suggestions must be very short (3-8 words max) - they appear as clickable chips
+- Suggestions must be phrased as USER messages (they get submitted as if the user typed them)
+- Make suggestions relevant to the current context and conversation
 
 Current context:
 - Dandiset ID: ${dandisetId || "(not loaded)"}
@@ -333,6 +349,127 @@ Available tools:
     setResponding(false);
   }, []);
 
+  // Fetch initial suggestions when metadata is loaded
+  const fetchInitialSuggestions = useCallback(async () => {
+    const metadata = getMetadata();
+    if (!metadata || !dandisetId) return;
+
+    // Prevent duplicate requests for the same dandiset
+    const requestKey = `${dandisetId}-${version}`;
+    if (initialSuggestionsRequestedForRef.current === requestKey) return;
+    initialSuggestionsRequestedForRef.current = requestKey;
+
+    setLoadingInitialSuggestions(true);
+    setInitialSuggestions([]);
+
+    try {
+      const systemPrompt = buildSystemPrompt();
+      const suggestionsChat: Chat = {
+        ...emptyChat,
+        messages: [
+          {
+            role: "user",
+            content: "Based on the current metadata, provide 3 very short (3-8 words each) suggested prompts that would help improve this dandiset's metadata. Only output the suggestions code block, nothing else.",
+          },
+        ],
+      };
+
+      // Make a simple completion request (no tools needed for suggestions)
+      const apiKey = getStoredOpenRouterApiKey();
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+      };
+      if (apiKey) {
+        headers["x-openrouter-key"] = apiKey;
+      }
+
+      const response = await fetch("https://qp-worker.neurosift.app/api/completion", {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          model: suggestionsChat.model,
+          systemMessage: systemPrompt,
+          messages: suggestionsChat.messages,
+          tools: [], // No tools for initial suggestions
+          app: "dandiset-metadata-assistant",
+        }),
+      });
+
+      if (!response.ok) {
+        console.warn("Failed to fetch initial suggestions:", response.statusText);
+        return;
+      }
+
+      const reader = response.body?.getReader();
+      if (!reader) return;
+
+      // Parse the streaming response
+      let fullContent = "";
+      const decoder = new TextDecoder();
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        const chunk = decoder.decode(value, { stream: true });
+        const lines = chunk.split("\n");
+
+        for (const line of lines) {
+          if (line.startsWith("data: ")) {
+            const data = line.slice(6);
+            if (data === "[DONE]") continue;
+            try {
+              const parsed = JSON.parse(data);
+              const delta = parsed.choices?.[0]?.delta?.content;
+              if (delta) {
+                fullContent += delta;
+              }
+            } catch {
+              // Ignore parse errors
+            }
+          }
+        }
+      }
+
+      // Parse suggestions from the response
+      const { suggestions } = parseSuggestions(fullContent);
+      if (suggestions.length > 0) {
+        setInitialSuggestions(suggestions);
+      }
+    } catch (err) {
+      console.warn("Error fetching initial suggestions:", err);
+    } finally {
+      setLoadingInitialSuggestions(false);
+    }
+  }, [getMetadata, dandisetId, version, buildSystemPrompt]);
+
+  // Trigger initial suggestions fetch when metadata is available
+  useEffect(() => {
+    const metadata = getMetadata();
+    if (metadata && dandisetId && chat.messages.length === 0) {
+      fetchInitialSuggestions();
+    }
+  }, [getMetadata, dandisetId, chat.messages.length, fetchInitialSuggestions]);
+
+  // Get current suggestions (from last assistant message or initial suggestions)
+  const currentSuggestions = useMemo(() => {
+    // Find the last assistant message with content
+    for (let i = chat.messages.length - 1; i >= 0; i--) {
+      const msg = chat.messages[i];
+      if (msg.role === "assistant" && msg.content) {
+        const content = typeof msg.content === "string" ? msg.content : "";
+        const { suggestions } = parseSuggestions(content);
+        if (suggestions.length > 0) {
+          return suggestions;
+        }
+        // If last assistant message has no suggestions, don't fall back to initial
+        return [];
+      }
+    }
+    // No messages yet, use initial suggestions
+    return initialSuggestions;
+  }, [chat.messages, initialSuggestions]);
+
   return {
     chat,
     submitUserMessage,
@@ -344,6 +481,8 @@ Available tools:
     abortResponse,
     revertToMessage,
     tools,
+    currentSuggestions,
+    loadingInitialSuggestions,
   };
 };
 

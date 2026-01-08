@@ -8,6 +8,7 @@ import ExpandLessIcon from "@mui/icons-material/ExpandLess";
 import HistoryIcon from "@mui/icons-material/History";
 import MarkdownContent from "./MarkdownContent";
 import { ChatMessage, ORContentPart } from "../../chat/types";
+import { parseSuggestions } from "../../chat/parseSuggestions";
 
 interface MessageItemProps {
   message: ChatMessage;
@@ -30,6 +31,14 @@ const messageContentToString = (
       else return "";
     })
     .join("\n");
+};
+
+/**
+ * Strip suggestions block from content for display
+ */
+const stripSuggestionsFromContent = (content: string): string => {
+  const { cleanedContent } = parseSuggestions(content);
+  return cleanedContent;
 };
 
 /**
@@ -309,24 +318,8 @@ const MessageItem: FunctionComponent<MessageItemProps> = ({
 }) => {
   const [isHovered, setIsHovered] = useState(false);
 
-  const RevertButton = () => {
-    if (!canRevert || messageIndex === undefined || !onRevert) return null;
-    return (
-      <Tooltip title="Revert to this point">
-        <IconButton
-          size="small"
-          onClick={() => onRevert(messageIndex)}
-          sx={{
-            opacity: isHovered ? 1 : 0,
-            transition: "opacity 0.2s",
-            p: 0.5,
-          }}
-        >
-          <HistoryIcon sx={{ fontSize: 16 }} />
-        </IconButton>
-      </Tooltip>
-    );
-  };
+  // Render revert button conditionally
+  const showRevertButton = canRevert && messageIndex !== undefined && onRevert;
 
   if (message.role === "user") {
     return (
@@ -367,7 +360,9 @@ const MessageItem: FunctionComponent<MessageItemProps> = ({
   }
 
   if (message.role === "assistant") {
-    const content = messageContentToString(message.content);
+    const rawContent = messageContentToString(message.content);
+    // Strip suggestions block from displayed content
+    const content = stripSuggestionsFromContent(rawContent);
     const hasToolCalls = message.tool_calls && message.tool_calls.length > 0;
 
     return (
@@ -438,7 +433,21 @@ const MessageItem: FunctionComponent<MessageItemProps> = ({
             </Box>
           </Box>
         </Paper>
-        <RevertButton />
+        {showRevertButton && (
+          <Tooltip title="Revert to this point">
+            <IconButton
+              size="small"
+              onClick={() => onRevert(messageIndex)}
+              sx={{
+                opacity: isHovered ? 1 : 0,
+                transition: "opacity 0.2s",
+                p: 0.5,
+              }}
+            >
+              <HistoryIcon sx={{ fontSize: 16 }} />
+            </IconButton>
+          </Tooltip>
+        )}
       </Box>
     );
   }
