@@ -19,34 +19,44 @@ export interface ParsedSuggestions {
 /**
  * Parse suggestions from markdown content.
  * Looks for ```suggestions code blocks containing JSON arrays.
+ * Uses simple string searching instead of regex for more robust parsing.
  */
 export function parseSuggestions(content: string): ParsedSuggestions {
-  // Match ```suggestions ... ``` blocks (with optional whitespace)
-  const suggestionsRegex = /```suggestions\s*([\s\S]*?)```/g;
-  
   let suggestions: string[] = [];
   let cleanedContent = content;
   
-  // Find all suggestions blocks (though typically there should only be one)
-  const matches = content.matchAll(suggestionsRegex);
+  // Find ```suggestions marker
+  const startMarker = '```suggestions';
+  const startIndex = content.indexOf(startMarker);
   
-  for (const match of matches) {
-    const jsonString = match[1].trim();
+  if (startIndex !== -1) {
+    // Find the closing ``` after the start marker
+    const contentAfterMarker = content.substring(startIndex + startMarker.length);
+    const endIndex = contentAfterMarker.indexOf('```');
     
-    try {
-      const parsed = JSON.parse(jsonString);
+    if (endIndex !== -1) {
+      // Extract the JSON content between markers
+      const jsonString = contentAfterMarker.substring(0, endIndex).trim();
       
-      // Validate it's an array of strings
-      if (Array.isArray(parsed) && parsed.every(item => typeof item === 'string')) {
-        suggestions = parsed;
+      try {
+        const parsed = JSON.parse(jsonString);
+        
+        // Validate it's an array of strings
+        if (Array.isArray(parsed) && parsed.every(item => typeof item === 'string')) {
+          suggestions = parsed;
+        }
+      } catch (e) {
+        // Invalid JSON, skip this block
+        console.warn('Failed to parse suggestions block:', e);
       }
-    } catch (e) {
-      // Invalid JSON, skip this block
-      console.warn('Failed to parse suggestions block:', e);
+      
+      // Remove the suggestions block from content
+      const fullBlockEnd = startIndex + startMarker.length + endIndex + 3; // +3 for closing ```
+      cleanedContent = (
+        content.substring(0, startIndex) + 
+        content.substring(fullBlockEnd)
+      ).trim();
     }
-    
-    // Remove the suggestions block from content
-    cleanedContent = cleanedContent.replace(match[0], '').trim();
   }
   
   return {
@@ -59,5 +69,9 @@ export function parseSuggestions(content: string): ParsedSuggestions {
  * Check if content contains a suggestions block
  */
 export function hasSuggestions(content: string): boolean {
-  return /```suggestions\s*[\s\S]*?```/.test(content);
+  const startIndex = content.indexOf('```suggestions');
+  if (startIndex === -1) return false;
+  
+  const contentAfterMarker = content.substring(startIndex + '```suggestions'.length);
+  return contentAfterMarker.indexOf('```') !== -1;
 }
