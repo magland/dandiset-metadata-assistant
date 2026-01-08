@@ -4,6 +4,22 @@ import { AVAILABLE_MODELS } from "./availableModels";
 import { getStoredOpenRouterApiKey } from "./apiKeyStorage";
 import { parseCompletionStream } from "./parseCompletionStream";
 
+// Retry configuration for rate limit errors
+const MAX_RETRIES = 3;
+const INITIAL_RETRY_DELAY_MS = 10000; // 10 seconds (rate limit is 10 req/min)
+
+/**
+ * Sleep for a given number of milliseconds
+ */
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/**
+ * Check if an error is a rate limit error
+ */
+const isRateLimitError = (status: number, errorMessage: string): boolean => {
+  return status === 429 || errorMessage.toLowerCase().includes("rate limit");
+};
+
 const processCompletion = async (
   chat: Chat,
   onPartialResponse: (messages: ChatMessage[]) => void,
@@ -32,32 +48,87 @@ const processCompletion = async (
     headers["x-openrouter-key"] = apiKey;
   }
 
-  const response = await fetch("https://qp-worker.neurosift.app/api/completion", {
-    method: "POST",
-    headers,
-    body: JSON.stringify(request),
-    signal,
-  });
+  // Fetch with retry logic for rate limit errors
+  let response: Response | null = null;
+  let lastError: Error | null = null;
 
-  if (!response.ok) {
-    // Try to get detailed error message from response body
-    let errorDetails = response.statusText || `HTTP ${response.status}`;
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
     try {
-      const errorBody = await response.text();
-      if (errorBody) {
-        // Try to parse as JSON for structured error
-        try {
-          const errorJson = JSON.parse(errorBody);
-          errorDetails = errorJson.error?.message || errorJson.message || errorJson.error || errorBody;
-        } catch {
-          // Not JSON, use raw text
-          errorDetails = errorBody;
-        }
+      response = await fetch("https://qp-worker.neurosift.app/api/completion", {
+        method: "POST",
+        headers,
+        body: JSON.stringify(request),
+        signal,
+      });
+
+      if (response.ok) {
+        break; // Success, exit retry loop
       }
-    } catch {
-      // Couldn't read body, stick with statusText
+
+      // Try to get detailed error message from response body
+      let errorDetails = response.statusText || `HTTP ${response.status}`;
+      try {
+        const errorBody = await response.text();
+        if (errorBody) {
+          // Try to parse as JSON for structured error
+          try {
+            const errorJson = JSON.parse(errorBody);
+            errorDetails = errorJson.error?.message || errorJson.message || errorJson.error || errorBody;
+          } catch {
+            // Not JSON, use raw text
+            errorDetails = errorBody;
+          }
+        }
+      } catch {
+        // Couldn't read body, stick with statusText
+      }
+
+      // Check if this is a rate limit error and we should retry
+      if (isRateLimitError(response.status, errorDetails) && attempt < MAX_RETRIES) {
+        const delayMs = INITIAL_RETRY_DELAY_MS * Math.pow(2, attempt);
+        console.warn(`Rate limit hit, retrying in ${delayMs / 1000}s (attempt ${attempt + 1}/${MAX_RETRIES})...`);
+
+        // Update partial response to show waiting message
+        onPartialResponse([
+          {
+            role: "assistant",
+            content: `⏳ Rate limit reached. Waiting ${Math.round(delayMs / 1000)} seconds before retrying (attempt ${attempt + 1}/${MAX_RETRIES})...`,
+            model: chat.model,
+            usage: { promptTokens: 0, completionTokens: 0, estimatedCost: 0 },
+          },
+        ]);
+
+        await sleep(delayMs);
+        continue; // Retry
+      }
+
+      // Not a rate limit error or out of retries
+      lastError = new Error(`OpenRouter API error: ${errorDetails}`);
+      break;
+    } catch (err) {
+      // Network error or abort
+      if (err instanceof Error && err.name === "AbortError") {
+        throw err; // Don't retry aborted requests
+      }
+      lastError = err instanceof Error ? err : new Error(String(err));
+
+      // Only retry network errors if we have retries left
+      if (attempt < MAX_RETRIES) {
+        const delayMs = INITIAL_RETRY_DELAY_MS * Math.pow(2, attempt);
+        console.warn(`Network error, retrying in ${delayMs / 1000}s...`);
+        await sleep(delayMs);
+        continue;
+      }
+      break;
     }
-    throw new Error(`OpenRouter API error: ${errorDetails}`);
+  }
+
+  if (lastError) {
+    throw lastError;
+  }
+
+  if (!response || !response.ok) {
+    throw new Error("Failed to get response from API");
   }
 
   const reader = response.body?.getReader();
