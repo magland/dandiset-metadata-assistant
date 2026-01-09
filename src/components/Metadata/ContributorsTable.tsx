@@ -241,13 +241,28 @@ function ContributorRow({ contributor, index, hasChange, hasChildChanges, onReve
                       <TableRow>
                         <TableCell sx={{ width: 100, fontWeight: 500, color: 'text.secondary', border: 0, py: 0.5, verticalAlign: 'top' }}>Affiliation</TableCell>
                         <TableCell sx={{ border: 0, py: 0.5 }}>
-                          {contributor.affiliation.map((aff, i) => (
-                            <Typography key={i} variant="body2">
-                              {typeof aff === 'object' && aff !== null && 'name' in aff 
-                                ? (aff as { name: string }).name 
-                                : String(aff)}
-                            </Typography>
-                          ))}
+                          {contributor.affiliation.map((aff, i) => {
+                            if (typeof aff === 'object' && aff !== null && 'name' in aff) {
+                              const affObj = aff as { name: string; identifier?: string };
+                              return (
+                                <Box key={i} sx={{ mb: i < contributor.affiliation!.length - 1 ? 0.5 : 0 }}>
+                                  <Typography variant="body2">
+                                    {affObj.name}
+                                  </Typography>
+                                  {affObj.identifier && (
+                                    <Typography variant="caption" sx={{ fontFamily: 'monospace', color: 'text.secondary' }}>
+                                      {affObj.identifier}
+                                    </Typography>
+                                  )}
+                                </Box>
+                              );
+                            }
+                            return (
+                              <Typography key={i} variant="body2">
+                                {String(aff)}
+                              </Typography>
+                            );
+                          })}
                         </TableCell>
                       </TableRow>
                     )}
