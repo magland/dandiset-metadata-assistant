@@ -102,28 +102,35 @@ export function MetadataProvider({ children }: { children: ReactNode }) {
 
   const getModifiedMetadata = useCallback((): DandisetMetadata | null => {
     if (!versionInfo) return null;
-    
+
     // Deep clone the metadata
     const modified = JSON.parse(JSON.stringify(versionInfo.metadata)) as DandisetMetadata;
-    
+
     // Apply pending changes
     for (const change of pendingChanges) {
       const pathParts = change.path.split('.');
       let current: unknown = modified;
-      
+
       for (let i = 0; i < pathParts.length - 1; i++) {
         const part = pathParts[i];
+        const nextPart = pathParts[i + 1];
         if (current && typeof current === 'object') {
-          current = (current as Record<string, unknown>)[part];
+          const obj = current as Record<string, unknown>;
+          // Create intermediate objects/arrays if they don't exist
+          if (obj[part] === undefined || obj[part] === null) {
+            // Check if next part is a numeric index to decide array vs object
+            obj[part] = /^\d+$/.test(nextPart) ? [] : {};
+          }
+          current = obj[part];
         }
       }
-      
+
       const lastPart = pathParts[pathParts.length - 1];
       if (current && typeof current === 'object') {
         (current as Record<string, unknown>)[lastPart] = change.newValue;
       }
     }
-    
+
     return modified;
   }, [versionInfo, pendingChanges]);
 

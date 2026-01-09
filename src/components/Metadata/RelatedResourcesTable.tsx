@@ -253,7 +253,8 @@ function ResourceRow({ resource, index, hasChange, hasChildChanges, isNewItem = 
 export function RelatedResourcesTable() {
   const { versionInfo, pendingChanges, removePendingChange, getPendingChangeForPath, getModifiedMetadata } = useMetadataContext();
 
-  if (!versionInfo) return null;
+  const metadata = getModifiedMetadata();
+  if (!metadata) return null;
 
   // Get both original and modified resources to handle new items
   const originalResources = versionInfo.metadata.relatedResource || [];

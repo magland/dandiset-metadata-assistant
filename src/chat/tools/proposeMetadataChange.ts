@@ -90,7 +90,14 @@ export const proposeMetadataChangeTool: QPTool = {
     if (pathParts.length > 1) {
       const parentPath = pathParts.slice(0, -1).join(".");
       const parentValue = getValueAtPath(metadata, parentPath);
-      if (parentValue === undefined) {
+
+      // Special case: if parent is undefined but is a top-level array field being created,
+      // allow setting index 0 to initialize the array
+      const lastPart = pathParts[pathParts.length - 1];
+      const isArrayIndex = /^\d+$/.test(lastPart);
+      const isTopLevelArray = pathParts.length === 2 && isArrayIndex;
+
+      if (parentValue === undefined && !isTopLevelArray) {
         return {
           result: JSON.stringify({
             success: false,

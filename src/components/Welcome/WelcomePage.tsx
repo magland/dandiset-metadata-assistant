@@ -373,6 +373,7 @@ export function WelcomePage({ onDandisetLoaded }: WelcomePageProps) {
                     <Box component="span">
                       <Typography
                         variant="body2"
+                        component="span"
                         color="text.secondary"
                         sx={{
                           display: 'block',
@@ -383,7 +384,7 @@ export function WelcomePage({ onDandisetLoaded }: WelcomePageProps) {
                       >
                         {dandiset.draft_version.name}
                       </Typography>
-                      <Typography variant="caption" color="text.secondary">
+                      <Typography variant="caption" component="span" color="text.secondary">
                         Modified: {formatDate(dandiset.modified)}
                       </Typography>
                     </Box>

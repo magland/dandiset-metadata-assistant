@@ -289,7 +289,8 @@ function ContributorRow({ contributor, index, hasChange, hasChildChanges, isNewI
 export function ContributorsTable() {
   const { versionInfo, pendingChanges, removePendingChange, getPendingChangeForPath, getModifiedMetadata } = useMetadataContext();
 
-  if (!versionInfo) return null;
+  const metadata = getModifiedMetadata();
+  if (!metadata) return null;
 
   // Get both original and modified contributors to handle new items
   const originalContributors = versionInfo.metadata.contributor || [];
