@@ -1,8 +1,8 @@
 import { useEffect, useCallback } from 'react';
 import { ThemeProvider, createTheme, CssBaseline } from '@mui/material';
 import { Box, AppBar, Toolbar, Typography } from '@mui/material';
-import ScienceIcon from '@mui/icons-material/Science';
 import { MetadataProvider, useMetadataContext } from './context/MetadataContext';
+import logoIcon from '/logo-white.svg';
 import { MainLayout } from './components/Layout/MainLayout';
 import { ChatPanel } from './components/Chat/ChatPanel';
 import { MetadataPanel } from './components/Metadata/MetadataPanel';
@@ -130,7 +130,7 @@ function AppContent() {
         {/* Minimal App Bar for welcome page */}
         <AppBar position="static" elevation={1}>
           <Toolbar variant="dense">
-            <ScienceIcon sx={{ mr: 1 }} />
+            <Box component="img" src={logoIcon} alt="Logo" sx={{ height: 24, mr: 1 }} />
             <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
               Dandiset Metadata Assistant
             </Typography>
@@ -151,7 +151,7 @@ function AppContent() {
       {/* App Bar with loaded dandiset */}
       <AppBar position="static" elevation={1}>
         <Toolbar variant="dense">
-          <ScienceIcon sx={{ mr: 1 }} />
+          <Box component="img" src={logoIcon} alt="Logo" sx={{ height: 24, mr: 1 }} />
           <Typography variant="h6" component="div" sx={{ mr: 3 }}>
             Dandiset Metadata Assistant
           </Typography>
