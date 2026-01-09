@@ -8,6 +8,9 @@ import { parseCompletionStream } from "./parseCompletionStream";
 const MAX_RETRIES = 3;
 const INITIAL_RETRY_DELAY_MS = 10000; // 10 seconds (rate limit is 10 req/min)
 
+// Maximum number of messages to send to the API
+const MAX_MESSAGES = 45; // Leave some buffer below the 50 limit
+
 /**
  * Sleep for a given number of milliseconds
  */
@@ -20,6 +23,42 @@ const isRateLimitError = (status: number, errorMessage: string): boolean => {
   return status === 429 || errorMessage.toLowerCase().includes("rate limit");
 };
 
+/**
+ * Truncate messages to fit within the API limit while preserving conversation coherence.
+ * - Keeps the most recent messages
+ * - Removes complete tool call/response sequences together
+ * - Adds a note about truncation
+ */
+const truncateMessages = (messages: ChatMessage[]): ChatMessage[] => {
+  if (messages.length <= MAX_MESSAGES) {
+    return messages;
+  }
+
+  // We need to remove messages from the start, but we should try to keep
+  // tool call and tool response pairs together
+  const truncated = [...messages];
+
+  // Keep removing from the front until we're under the limit
+  while (truncated.length > MAX_MESSAGES - 1) { // -1 to leave room for truncation note
+    // Remove the first message
+    truncated.shift();
+
+    // If the new first message is a tool response, remove it too
+    // (because the tool call it responds to was just removed)
+    while (truncated.length > 0 && truncated[0].role === "tool") {
+      truncated.shift();
+    }
+  }
+
+  // Add a note at the start indicating truncation occurred
+  const truncationNote: ChatMessage = {
+    role: "user",
+    content: "[Note: Earlier messages in this conversation have been truncated to stay within context limits. The conversation continues from the remaining context.]",
+  };
+
+  return [truncationNote, ...truncated];
+};
+
 const processCompletion = async (
   chat: Chat,
   onPartialResponse: (messages: ChatMessage[]) => void,
@@ -28,10 +67,13 @@ const processCompletion = async (
   toolExecutionContext: ToolExecutionContext,
   signal?: AbortSignal,
 ): Promise<ChatMessage[]> => {
+  // Truncate messages if needed to stay within API limits
+  const truncatedMessages = truncateMessages(chat.messages);
+
   const request: CompletionRequest = {
     model: chat.model,
     systemMessage: initialSystemMessage,
-    messages: chat.messages,
+    messages: truncatedMessages,
     tools: tools.map((tool) => ({
       type: "function",
       function: tool.toolFunction,
