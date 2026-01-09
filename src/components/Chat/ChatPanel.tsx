@@ -188,7 +188,8 @@ export function ChatPanel() {
             label={chat.model.split("/")[1]}
             size="small"
             variant="outlined"
-            sx={{ fontSize: "0.7rem" }}
+            onClick={() => setSettingsOpen(true)}
+            sx={{ fontSize: "0.7rem", cursor: "pointer" }}
           />
           <Tooltip title="Download Chat">
             <span>
