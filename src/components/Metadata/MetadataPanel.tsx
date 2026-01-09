@@ -1,17 +1,41 @@
 import { useState } from 'react';
-import { Box, Typography, CircularProgress, IconButton, Tooltip } from '@mui/material';
+import { Box, Typography, CircularProgress, IconButton, Tooltip, Tabs, Tab, Badge } from '@mui/material';
 import DescriptionIcon from '@mui/icons-material/Description';
 import EditIcon from '@mui/icons-material/Edit';
 import { useMetadataContext } from '../../context/MetadataContext';
 import { DandisetInfo } from './DandisetInfo';
 import { ChangesSummary } from './ChangesSummary';
 import { MetadataDisplay } from './MetadataDisplay';
+import { JsonComparisonView } from './JsonComparisonView';
 import { CommitButton } from '../Controls/CommitButton';
 import { JsonEditorDialog } from './JsonEditorDialog';
 
+interface TabPanelProps {
+  children?: React.ReactNode;
+  index: number;
+  value: number;
+}
+
+function TabPanel({ children, value, index }: TabPanelProps) {
+  return (
+    <Box
+      role="tabpanel"
+      hidden={value !== index}
+      sx={{ display: value === index ? 'block' : 'none' }}
+    >
+      {value === index && children}
+    </Box>
+  );
+}
+
 export function MetadataPanel() {
-  const { versionInfo, isLoading } = useMetadataContext();
+  const { versionInfo, isLoading, pendingChanges } = useMetadataContext();
   const [editorOpen, setEditorOpen] = useState(false);
+  const [tabValue, setTabValue] = useState(0);
+
+  const handleTabChange = (_event: React.SyntheticEvent, newValue: number) => {
+    setTabValue(newValue);
+  };
 
   return (
     <Box
@@ -56,6 +80,43 @@ export function MetadataPanel() {
         </Box>
       </Box>
 
+      {/* Tabs - only show when data is loaded */}
+      {versionInfo && (
+        <Box sx={{ borderBottom: 1, borderColor: 'divider', backgroundColor: 'background.paper' }}>
+          <Tabs
+            value={tabValue}
+            onChange={handleTabChange}
+            variant="fullWidth"
+            sx={{
+              minHeight: 40,
+              '& .MuiTab-root': {
+                minHeight: 40,
+                textTransform: 'none',
+                fontSize: '0.875rem',
+              },
+            }}
+          >
+            <Tab label="Overview" />
+            <Tab
+              label={
+                <Badge
+                  badgeContent={pendingChanges.length}
+                  color="primary"
+                  sx={{
+                    '& .MuiBadge-badge': {
+                      right: -12,
+                      top: 2,
+                    },
+                  }}
+                >
+                  JSON Diff
+                </Badge>
+              }
+            />
+          </Tabs>
+        </Box>
+      )}
+
       {/* Content */}
       <Box
         sx={{
@@ -77,9 +138,14 @@ export function MetadataPanel() {
           </Box>
         ) : versionInfo ? (
           <>
-            <DandisetInfo />
-            <ChangesSummary />
-            <MetadataDisplay />
+            <TabPanel value={tabValue} index={0}>
+              <DandisetInfo />
+              <ChangesSummary />
+              <MetadataDisplay />
+            </TabPanel>
+            <TabPanel value={tabValue} index={1}>
+              <JsonComparisonView />
+            </TabPanel>
           </>
         ) : (
           <Box
