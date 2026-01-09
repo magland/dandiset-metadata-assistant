@@ -48,7 +48,7 @@ curl -X POST http://localhost:8787/commit \
   -H "Content-Type: application/json" \
   -H "Origin: http://localhost:5173" \
   -d '{
-    "dandisetId": "001457",
+    "dandisetId": "000003",
     "version": "draft",
     "metadata": {...},
     "apiKey": "your-api-key"

@@ -36,7 +36,7 @@ export function MetadataPanel() {
           gap: 1,
         }}
       >
-        <Typography variant="h6" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+        <Typography variant="h6" sx={{ display: 'flex', alignItems: 'center', gap: 1, userSelect: 'none' }}>
           <DescriptionIcon color="primary" />
           Metadata
         </Typography>

@@ -1,8 +1,9 @@
-import { Box, Typography, Paper, Chip, Divider } from '@mui/material';
+import { Box, Typography, Paper, Chip, Divider, Link } from '@mui/material';
 import StorageIcon from '@mui/icons-material/Storage';
 import FolderIcon from '@mui/icons-material/Folder';
 import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
 import PersonIcon from '@mui/icons-material/Person';
+import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import { useMetadataContext } from '../../context/MetadataContext';
 
 function formatBytes(bytes: number): string {
@@ -51,9 +52,26 @@ export function DandisetInfo() {
   return (
     <Paper variant="outlined" sx={{ p: 2, mb: 2 }}>
       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
-        <Typography variant="subtitle1" fontWeight="bold">
-          Dandiset {dandisetId}
-        </Typography>
+        <Link
+          href={`https://dandiarchive.org/dandiset/${dandisetId}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          underline="hover"
+          sx={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 0.5,
+            color: 'inherit',
+            '&:hover': {
+              color: 'primary.main',
+            },
+          }}
+        >
+          <Typography variant="subtitle1" fontWeight="bold">
+            Dandiset {dandisetId}
+          </Typography>
+          <OpenInNewIcon fontSize="small" sx={{ fontSize: '1rem' }} />
+        </Link>
         <Box sx={{ display: 'flex', gap: 1 }}>
           <Chip label={versionInfo.status} size="small" color={statusColor} />
           {versionInfo.dandiset.embargo_status !== 'OPEN' && (

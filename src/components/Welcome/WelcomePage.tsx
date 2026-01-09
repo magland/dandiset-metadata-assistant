@@ -255,7 +255,7 @@ export function WelcomePage({ onDandisetLoaded }: WelcomePageProps) {
         <Box sx={{ display: 'flex', gap: 1, mb: 3 }}>
           <TextField
             label="Dandiset ID"
-            placeholder="e.g., 001457"
+            placeholder="e.g., 000003"
             value={localDandisetId}
             onChange={(e) => setLocalDandisetId(e.target.value)}
             onKeyPress={handleKeyPress}

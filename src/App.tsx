@@ -152,7 +152,18 @@ function AppContent() {
       <AppBar position="static" elevation={1}>
         <Toolbar variant="dense">
           <ScienceIcon sx={{ mr: 1 }} />
-          <Typography variant="h6" component="div" sx={{ mr: 3 }}>
+          <Typography
+            variant="h6"
+            component="div"
+            sx={{
+              mr: 3,
+              cursor: 'pointer',
+              '&:hover': {
+                opacity: 0.8,
+              }
+            }}
+            onClick={handleChangeDandiset}
+          >
             Dandiset Metadata Assistant
           </Typography>
           <Box sx={{ flexGrow: 1 }}>

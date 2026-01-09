@@ -166,7 +166,7 @@ export function ChatPanel() {
       >
         <Typography
           variant="h6"
-          sx={{ display: "flex", alignItems: "center", gap: 1 }}
+          sx={{ display: "flex", alignItems: "center", gap: 1, userSelect: "none" }}
         >
           <SmartToyIcon color="primary" />
           Assistant

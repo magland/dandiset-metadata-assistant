@@ -17,7 +17,7 @@ export function DandisetIndicator({ onChangeDandiset }: DandisetIndicatorProps) 
   return (
     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
       <FolderOpenIcon sx={{ fontSize: 20, opacity: 0.8 }} />
-      <Typography variant="body1" sx={{ fontWeight: 500 }}>
+      <Typography variant="body1" sx={{ fontWeight: 500, userSelect: 'none' }}>
         Dandiset {dandisetId}
       </Typography>
       <Button

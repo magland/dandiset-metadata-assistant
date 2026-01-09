@@ -22,7 +22,7 @@ npm run dev
 
 ## Usage
 
-1. Enter a Dandiset ID (e.g., `001457`) and select a version
+1. Enter a Dandiset ID (e.g., `000003`) and select a version
 2. Click "Load" to fetch the metadata
 3. (Optional) Configure your DANDI API key to access embargoed dandisets and enable committing changes
 4. Use the AI assistant to propose metadata changes
