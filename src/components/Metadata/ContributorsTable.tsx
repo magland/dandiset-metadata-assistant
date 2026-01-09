@@ -18,6 +18,7 @@ import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import PersonIcon from '@mui/icons-material/Person';
 import BusinessIcon from '@mui/icons-material/Business';
+import AddIcon from '@mui/icons-material/Add';
 import { useMetadataContext } from '../../context/MetadataContext';
 import type { Contributor } from '../../types/dandiset';
 
@@ -26,6 +27,7 @@ interface ContributorRowProps {
   index: number;
   hasChange: boolean;
   hasChildChanges: boolean;
+  isNewItem?: boolean;
   onRevert?: () => void;
 }
 
@@ -34,12 +36,12 @@ function formatRoles(roles?: string[]): string[] {
   return roles.map(role => role.replace('dcite:', ''));
 }
 
-function ContributorRow({ contributor, index, hasChange, hasChildChanges, onRevert }: ContributorRowProps) {
+function ContributorRow({ contributor, index, hasChange, hasChildChanges, isNewItem = false, onRevert }: ContributorRowProps) {
   const [expanded, setExpanded] = useState(false);
   const { removePendingChange, getPendingChangeForPath } = useMetadataContext();
 
   const isPerson = contributor.schemaKey === 'Person';
-  const showExpand = contributor.email || contributor.url || contributor.awardNumber || 
+  const showExpand = contributor.email || contributor.url || contributor.awardNumber ||
                      (contributor.affiliation && contributor.affiliation.length > 0);
 
   // Get pending changes for specific fields
@@ -55,14 +57,14 @@ function ContributorRow({ contributor, index, hasChange, hasChildChanges, onReve
   const displayName = nameChange ? (nameChange.newValue as string) : contributor.name;
   const displayIdentifier = identifierChange ? (identifierChange.newValue as string) : contributor.identifier;
   const displayRoles = rolesChange ? formatRoles(rolesChange.newValue as string[]) : formatRoles(contributor.roleName);
-  const displayIncludeInCitation = includeInCitationChange !== undefined 
+  const displayIncludeInCitation = includeInCitationChange !== undefined
     ? (includeInCitationChange.newValue as boolean)
     : contributor.includeInCitation;
   const displayEmail = emailChange ? (emailChange.newValue as string) : contributor.email;
   const displayUrl = urlChange ? (urlChange.newValue as string) : contributor.url;
   const displayAwardNumber = awardNumberChange ? (awardNumberChange.newValue as string) : contributor.awardNumber;
 
-  const rowHighlight = hasChange || hasChildChanges;
+  const rowHighlight = hasChange || hasChildChanges || isNewItem;
 
   return (
     <>
@@ -73,13 +75,20 @@ function ContributorRow({ contributor, index, hasChange, hasChildChanges, onReve
         }}
       >
         <TableCell sx={{ py: 0.75, width: 40 }}>
-          {showExpand ? (
-            <IconButton size="small" onClick={() => setExpanded(!expanded)} sx={{ p: 0.25 }}>
-              {expanded ? <ExpandLessIcon fontSize="small" /> : <ExpandMoreIcon fontSize="small" />}
-            </IconButton>
-          ) : (
-            <Box sx={{ width: 24 }} />
-          )}
+          <Box sx={{ display: 'flex', alignItems: 'center' }}>
+            {isNewItem && (
+              <Tooltip title="New contributor">
+                <AddIcon fontSize="small" sx={{ color: 'success.main', mr: 0.5 }} />
+              </Tooltip>
+            )}
+            {showExpand ? (
+              <IconButton size="small" onClick={() => setExpanded(!expanded)} sx={{ p: 0.25 }}>
+                {expanded ? <ExpandLessIcon fontSize="small" /> : <ExpandMoreIcon fontSize="small" />}
+              </IconButton>
+            ) : (
+              !isNewItem && <Box sx={{ width: 24 }} />
+            )}
+          </Box>
         </TableCell>
         <TableCell sx={{ py: 0.75 }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
@@ -151,8 +160,8 @@ function ContributorRow({ contributor, index, hasChange, hasChildChanges, onReve
           ) : '—'}
         </TableCell>
         <TableCell sx={{ py: 0.75, width: 50 }}>
-          {(hasChange || hasChildChanges) && onRevert && (
-            <Tooltip title="Revert all changes to this contributor">
+          {(hasChange || hasChildChanges || isNewItem) && onRevert && (
+            <Tooltip title={isNewItem ? "Remove new contributor" : "Revert all changes to this contributor"}>
               <IconButton size="small" onClick={onRevert} color="warning" sx={{ p: 0.25 }}>
                 <UndoIcon fontSize="small" />
               </IconButton>
@@ -263,11 +272,14 @@ function ContributorRow({ contributor, index, hasChange, hasChildChanges, onReve
 }
 
 export function ContributorsTable() {
-  const { versionInfo, pendingChanges, removePendingChange, getPendingChangeForPath } = useMetadataContext();
+  const { versionInfo, pendingChanges, removePendingChange, getPendingChangeForPath, getModifiedMetadata } = useMetadataContext();
 
   if (!versionInfo) return null;
 
-  const contributors = versionInfo.metadata.contributor || [];
+  // Get both original and modified contributors to handle new items
+  const originalContributors = versionInfo.metadata.contributor || [];
+  const modifiedMetadata = getModifiedMetadata();
+  const contributors = modifiedMetadata?.contributor || originalContributors;
 
   if (contributors.length === 0) {
     return (
@@ -293,9 +305,11 @@ export function ContributorsTable() {
         <TableBody>
           {contributors.map((contributor, index) => {
             const hasDirectChange = !!getPendingChangeForPath(`contributor.${index}`);
-            const hasChildChanges = pendingChanges.some(c => 
+            const hasChildChanges = pendingChanges.some(c =>
               c.path.startsWith(`contributor.${index}.`)
             );
+            // Check if this is a new contributor (index >= original contributors length)
+            const isNewItem = index >= originalContributors.length;
 
             const handleRevert = () => {
               // Remove direct change
@@ -313,7 +327,8 @@ export function ContributorsTable() {
                 index={index}
                 hasChange={hasDirectChange}
                 hasChildChanges={hasChildChanges}
-                onRevert={(hasDirectChange || hasChildChanges) ? handleRevert : undefined}
+                isNewItem={isNewItem}
+                onRevert={(hasDirectChange || hasChildChanges || isNewItem) ? handleRevert : undefined}
               />
             );
           })}

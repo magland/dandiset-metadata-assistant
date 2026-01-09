@@ -18,6 +18,7 @@ import UndoIcon from '@mui/icons-material/Undo';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import LinkIcon from '@mui/icons-material/Link';
+import AddIcon from '@mui/icons-material/Add';
 import { useMetadataContext } from '../../context/MetadataContext';
 import type { RelatedResource } from '../../types/dandiset';
 
@@ -26,6 +27,7 @@ interface ResourceRowProps {
   index: number;
   hasChange: boolean;
   hasChildChanges: boolean;
+  isNewItem?: boolean;
   onRevert?: () => void;
 }
 
@@ -38,7 +40,7 @@ function formatResourceType(type?: string): string {
   return type.replace('dcite:', '');
 }
 
-function ResourceRow({ resource, index, hasChange, hasChildChanges, onRevert }: ResourceRowProps) {
+function ResourceRow({ resource, index, hasChange, hasChildChanges, isNewItem = false, onRevert }: ResourceRowProps) {
   const [expanded, setExpanded] = useState(false);
   const { removePendingChange, getPendingChangeForPath } = useMetadataContext();
 
@@ -60,7 +62,7 @@ function ResourceRow({ resource, index, hasChange, hasChildChanges, onRevert }: 
 
   const showExpand = displayIdentifier || displayRepository || displayResourceType;
 
-  const rowHighlight = hasChange || hasChildChanges;
+  const rowHighlight = hasChange || hasChildChanges || isNewItem;
 
   return (
     <>
@@ -71,13 +73,20 @@ function ResourceRow({ resource, index, hasChange, hasChildChanges, onRevert }: 
         }}
       >
         <TableCell sx={{ py: 0.75, width: 40 }}>
-          {showExpand ? (
-            <IconButton size="small" onClick={() => setExpanded(!expanded)} sx={{ p: 0.25 }}>
-              {expanded ? <ExpandLessIcon fontSize="small" /> : <ExpandMoreIcon fontSize="small" />}
-            </IconButton>
-          ) : (
-            <Box sx={{ width: 24 }} />
-          )}
+          <Box sx={{ display: 'flex', alignItems: 'center' }}>
+            {isNewItem && (
+              <Tooltip title="New resource">
+                <AddIcon fontSize="small" sx={{ color: 'success.main', mr: 0.5 }} />
+              </Tooltip>
+            )}
+            {showExpand ? (
+              <IconButton size="small" onClick={() => setExpanded(!expanded)} sx={{ p: 0.25 }}>
+                {expanded ? <ExpandLessIcon fontSize="small" /> : <ExpandMoreIcon fontSize="small" />}
+              </IconButton>
+            ) : (
+              !isNewItem && <Box sx={{ width: 24 }} />
+            )}
+          </Box>
         </TableCell>
         <TableCell sx={{ py: 0.75 }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
@@ -142,8 +151,8 @@ function ResourceRow({ resource, index, hasChange, hasChildChanges, onRevert }: 
           </Box>
         </TableCell>
         <TableCell sx={{ py: 0.75, width: 50 }}>
-          {(hasChange || hasChildChanges) && onRevert && (
-            <Tooltip title="Revert all changes to this resource">
+          {(hasChange || hasChildChanges || isNewItem) && onRevert && (
+            <Tooltip title={isNewItem ? "Remove new resource" : "Revert all changes to this resource"}>
               <IconButton size="small" onClick={onRevert} color="warning" sx={{ p: 0.25 }}>
                 <UndoIcon fontSize="small" />
               </IconButton>
@@ -242,11 +251,14 @@ function ResourceRow({ resource, index, hasChange, hasChildChanges, onRevert }: 
 }
 
 export function RelatedResourcesTable() {
-  const { versionInfo, pendingChanges, removePendingChange, getPendingChangeForPath } = useMetadataContext();
+  const { versionInfo, pendingChanges, removePendingChange, getPendingChangeForPath, getModifiedMetadata } = useMetadataContext();
 
   if (!versionInfo) return null;
 
-  const resources = versionInfo.metadata.relatedResource || [];
+  // Get both original and modified resources to handle new items
+  const originalResources = versionInfo.metadata.relatedResource || [];
+  const modifiedMetadata = getModifiedMetadata();
+  const resources = modifiedMetadata?.relatedResource || originalResources;
 
   if (resources.length === 0) {
     return (
@@ -271,9 +283,11 @@ export function RelatedResourcesTable() {
         <TableBody>
           {resources.map((resource, index) => {
             const hasDirectChange = !!getPendingChangeForPath(`relatedResource.${index}`);
-            const hasChildChanges = pendingChanges.some(c => 
+            const hasChildChanges = pendingChanges.some(c =>
               c.path.startsWith(`relatedResource.${index}.`)
             );
+            // Check if this is a new resource (index >= original resources length)
+            const isNewItem = index >= originalResources.length;
 
             const handleRevert = () => {
               removePendingChange(`relatedResource.${index}`);
@@ -289,7 +303,8 @@ export function RelatedResourcesTable() {
                 index={index}
                 hasChange={hasDirectChange}
                 hasChildChanges={hasChildChanges}
-                onRevert={(hasDirectChange || hasChildChanges) ? handleRevert : undefined}
+                isNewItem={isNewItem}
+                onRevert={(hasDirectChange || hasChildChanges || isNewItem) ? handleRevert : undefined}
               />
             );
           })}
