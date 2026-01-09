@@ -256,6 +256,14 @@ export function RelatedResourcesTable() {
   const metadata = getModifiedMetadata();
   if (!metadata) return null;
 
+  if (!versionInfo) {
+    return (
+      <Typography variant="body2" color="text.secondary" sx={{ fontStyle: 'italic', py: 1 }}>
+        Load a dandiset to view related resources
+      </Typography>
+    );
+  }
+
   // Get both original and modified resources to handle new items
   const originalResources = versionInfo.metadata.relatedResource || [];
   const modifiedMetadata = getModifiedMetadata();

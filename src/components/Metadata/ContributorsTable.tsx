@@ -292,6 +292,14 @@ export function ContributorsTable() {
   const metadata = getModifiedMetadata();
   if (!metadata) return null;
 
+  if (!versionInfo) {
+    return (
+      <Typography variant="body2" color="text.secondary" sx={{ fontStyle: 'italic', py: 1 }}>
+        Load a dandiset to view contributors
+      </Typography>
+    );
+  }
+
   // Get both original and modified contributors to handle new items
   const originalContributors = versionInfo.metadata.contributor || [];
   const modifiedMetadata = getModifiedMetadata();
