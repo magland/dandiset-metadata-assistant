@@ -238,6 +238,9 @@ export function WelcomePage({ onDandisetLoaded }: WelcomePageProps) {
           p: 4,
           maxWidth: 600,
           width: '100%',
+          display: 'flex',
+          flexDirection: 'column',
+          maxHeight: '100%',
         }}
       >
         {/* Header */}
@@ -314,7 +317,7 @@ export function WelcomePage({ onDandisetLoaded }: WelcomePageProps) {
             </a>
           </Typography>
         ) : (
-          <List sx={{ maxHeight: 400, overflow: 'auto' }}>
+          <List sx={{ overflow: 'auto', flex: '1 1 auto', minHeight: 0 }}>
             {ownedDandisets.map((dandiset) => (
               <ListItemButton
                 key={dandiset.identifier}
