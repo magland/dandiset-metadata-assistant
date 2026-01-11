@@ -12,6 +12,26 @@ function normalizePath(path: string): string {
   return path.replace(/\[(\d+)\]/g, '.$1');
 }
 
+/**
+ * Recursively clean arrays by removing null and undefined elements.
+ * This prevents validation errors when array items are reverted.
+ */
+function cleanArrays(obj: unknown): unknown {
+  if (Array.isArray(obj)) {
+    return obj
+      .filter(item => item !== null && item !== undefined)
+      .map(cleanArrays);
+  }
+  if (obj && typeof obj === 'object') {
+    const cleaned: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(obj)) {
+      cleaned[key] = cleanArrays(value);
+    }
+    return cleaned;
+  }
+  return obj;
+}
+
 interface MetadataContextType {
   // Current dandiset info
   dandisetId: string;
@@ -131,7 +151,9 @@ export function MetadataProvider({ children }: { children: ReactNode }) {
       }
     }
 
-    return modified;
+    // Clean up arrays - remove null/undefined elements that may have been created
+    // This fixes the issue where reverting array entries leaves null values
+    return cleanArrays(modified) as DandisetMetadata;
   }, [versionInfo, pendingChanges]);
 
   const value: MetadataContextType = {
