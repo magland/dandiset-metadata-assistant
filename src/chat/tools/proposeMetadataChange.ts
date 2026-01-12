@@ -1,136 +1,205 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { QPTool, ToolExecutionContext } from "../types";
-import {
-  validateMetadataChange,
-  formatValidationErrors,
-} from "../../schemas/validateMetadata";
 import { getReadOnlyFieldsSync } from "../../schemas/schemaService";
+import { QPTool, ToolExecutionContext, MetadataOperationType } from "../types";
 
-/**
- * Helper function to get a value at a path in an object using dot notation
- */
-const getValueAtPath = (obj: any, path: string): any => {
-  const parts = path.split(".");
-  let current = obj;
-  for (const part of parts) {
-    if (current === undefined || current === null) {
-      return undefined;
-    }
-    // Handle array indices
-    if (part.match(/^\d+$/)) {
-      current = current[parseInt(part, 10)];
-    } else {
-      current = current[part];
-    }
-  }
-  return current;
-};
+interface SingleChange {
+  operation: MetadataOperationType;
+  path: string;
+  value?: any;
+}
 
 export const proposeMetadataChangeTool: QPTool = {
   toolFunction: {
     name: "propose_metadata_change",
     description:
-      "Propose a change to a specific field in the dandiset metadata. The change will be added to the pending changes list for user review before committing.",
+      "Propose one or more changes to the dandiset metadata. Supports setting values, deleting array items, inserting into arrays, and appending to arrays. Changes are added to the pending changes list for user review before committing. Use the 'changes' array to apply multiple changes in one call.",
     parameters: {
       type: "object",
       properties: {
+        changes: {
+          type: "array",
+          description:
+            "An array of changes to apply. Each change should have 'operation', 'path', and optionally 'value'. " +
+            "Use this to apply multiple changes in a single tool call.",
+          items: {
+            type: "object",
+            properties: {
+              operation: {
+                type: "string",
+                enum: ["set", "delete", "insert", "append"],
+                description: "The type of operation to perform.",
+              },
+              path: {
+                type: "string",
+                description: "The dot-notation path to the field.",
+              },
+              value: {
+                description: "The value to set, insert, or append.",
+              },
+            },
+            required: ["operation", "path"],
+          },
+        },
+        operation: {
+          type: "string",
+          enum: ["set", "delete", "insert", "append"],
+          description:
+            "(For single change) The type of operation to perform:\n" +
+            "- 'set': Set a value at the specified path (create or update)\n" +
+            "- 'delete': Delete an item from an array by index\n" +
+            "- 'insert': Insert a value at a specific array index (shifts others right)\n" +
+            "- 'append': Add a value to the end of an array",
+        },
         path: {
           type: "string",
           description:
-            "The dot-notation path to the field to change (e.g., 'name', 'description', 'contributor.0.name', 'keywords.2')",
+            "(For single change) The dot-notation path to the field (e.g., 'name', 'contributor.0.name', 'keywords.2').\n" +
+            "For 'delete' and 'insert': path must end with an array index.\n" +
+            "For 'append': path should point to the array itself (e.g., 'keywords').",
         },
-        newValue: {
+        value: {
           description:
-            "The new value to set. Can be a string, number, boolean, array, or object depending on the field type.",
+            "(For single change) The value to set, insert, or append. Required for 'set', 'insert', and 'append' operations. " +
+            "Can be a string, number, boolean, array, or object depending on the field type.",
         },
         explanation: {
           type: "string",
           description:
-            "A brief explanation of why this change is being proposed (for user context).",
+            "A brief explanation of why these changes are being proposed (for user context).",
         },
       },
-      required: ["path", "newValue"],
+      required: [],
     },
   },
 
   execute: async (
-    params: { path: string; newValue: any; explanation?: string },
+    params: {
+      changes?: SingleChange[];
+      operation?: MetadataOperationType;
+      path?: string;
+      value?: any;
+      // Legacy support
+      newValue?: any;
+      explanation?: string
+    },
     context: ToolExecutionContext,
   ) => {
-    const { path, newValue, explanation } = params;
-
-    // Get current metadata
-    const metadata = context.getMetadata();
-    if (!metadata) {
-      return {
-        result: JSON.stringify({
-          success: false,
-          error: "No metadata is currently loaded. Please load a dandiset first.",
-        }),
-      };
-    }
-
-    // Check if the field is readOnly
-    const rootField = path.split(".")[0];
+    const { explanation } = params;
     const readOnlyFields = getReadOnlyFieldsSync();
-    if (readOnlyFields.has(rootField)) {
+    const validOperations: MetadataOperationType[] = ['set', 'delete', 'insert', 'append'];
+
+    // Build the list of changes to apply
+    let changes: SingleChange[];
+    
+    if (params.changes && params.changes.length > 0) {
+      // Use the changes array
+      changes = params.changes;
+    } else if (params.path) {
+      // Backward compatibility: single change via individual params
+      const value = params.value ?? params.newValue;
+      const operation: MetadataOperationType = params.operation ?? 'set';
+      changes = [{ operation, path: params.path, value }];
+    } else {
       return {
         result: JSON.stringify({
           success: false,
-          error: `The field "${rootField}" is read-only and cannot be modified. Read-only fields are automatically managed by the DANDI system.`,
+          error: "Either 'changes' array or 'path' must be provided.",
         }),
       };
     }
 
-    // Get the old value at the path
-    const oldValue = getValueAtPath(metadata, path);
+    const results: any[] = [];
+    let allSucceeded = true;
 
-    // Validate that the path exists in the metadata (for updates) or parent exists (for additions)
-    const pathParts = path.split(".");
-    if (pathParts.length > 1) {
-      const parentPath = pathParts.slice(0, -1).join(".");
-      const parentValue = getValueAtPath(metadata, parentPath);
+    for (let i = 0; i < changes.length; i++) {
+      const change = changes[i];
+      const { operation = 'set', path, value } = change;
 
-      // Special case: if parent is undefined but is a top-level array field being created,
-      // allow setting index 0 to initialize the array
-      const lastPart = pathParts[pathParts.length - 1];
-      const isArrayIndex = /^\d+$/.test(lastPart);
-      const isTopLevelArray = pathParts.length === 2 && isArrayIndex;
-
-      if (parentValue === undefined && !isTopLevelArray) {
-        return {
-          result: JSON.stringify({
-            success: false,
-            error: `Parent path "${parentPath}" does not exist in the metadata.`,
-          }),
-        };
+      // Validate operation
+      if (!validOperations.includes(operation)) {
+        results.push({
+          success: false,
+          index: i,
+          path,
+          error: `Invalid operation "${operation}". Must be one of: ${validOperations.join(', ')}`,
+        });
+        allSucceeded = false;
+        continue;
       }
-    }
 
-    // Validate the proposed change against the DANDI schema
-    const validationResult = validateMetadataChange(path, newValue, metadata);
-    if (!validationResult.valid) {
-      const errorMessage = formatValidationErrors(validationResult.errors);
-      return {
-        result: JSON.stringify({
+      // Check if the field is readOnly
+      const rootField = path.split(".")[0];
+      if (readOnlyFields.has(rootField)) {
+        results.push({
           success: false,
-          error: `Schema validation failed: ${errorMessage}`,
-          validationErrors: validationResult.errors,
-        }),
+          index: i,
+          path,
+          error: `The field "${rootField}" is read-only and cannot be modified.`,
+        });
+        allSucceeded = false;
+        continue;
+      }
+
+      // Validate that value is provided for operations that require it
+      if ((operation === 'set' || operation === 'insert' || operation === 'append') && value === undefined) {
+        results.push({
+          success: false,
+          index: i,
+          path,
+          error: `The "${operation}" operation requires a value to be provided.`,
+        });
+        allSucceeded = false;
+        continue;
+      }
+
+      // Apply the operation
+      const success = context.modifyMetadata(operation, path, value);
+
+      if (!success) {
+        results.push({
+          success: false,
+          index: i,
+          path,
+          error: `Failed to apply ${operation} operation at path "${path}".`,
+        });
+        allSucceeded = false;
+        continue;
+      }
+
+      const result: any = {
+        success: true,
+        index: i,
+        operation,
+        path,
+        message: getSuccessMessage(operation, path),
       };
+
+      if (value !== undefined) {
+        result.value = value;
+      }
+
+      results.push(result);
     }
 
-    // Add the pending change
-    context.addPendingChange(path, oldValue, newValue);
-
+    // Build response
     const response: any = {
-      success: true,
-      path,
-      oldValue: oldValue !== undefined ? oldValue : "(not set)",
-      newValue,
-      message: `Successfully proposed change to "${path}". The change is now pending user review.`,
+      success: allSucceeded,
+      totalChanges: changes.length,
+      successfulChanges: results.filter(r => r.success).length,
+      failedChanges: results.filter(r => !r.success).length,
     };
 
+    if (changes.length === 1) {
+      // Single change: return flat response for backward compatibility
+      const singleResult = results[0];
+      if (explanation) {
+        singleResult.explanation = explanation;
+      }
+      return { result: JSON.stringify(singleResult) };
+    }
+
+    // Multiple changes: return full results
+    response.results = results;
     if (explanation) {
       response.explanation = explanation;
     }
@@ -143,24 +212,83 @@ export const proposeMetadataChangeTool: QPTool = {
   getDetailedDescription: () => {
     return `Use this tool to propose changes to the dandiset metadata.
 
-**Usage:**
-- Specify the field path using dot notation (e.g., "name", "description", "contributor.0.affiliation")
-- Provide the new value for the field
-- Optionally include an explanation for the change
+**Multiple Changes:**
 
-**Examples:**
-- Change the name: { "path": "name", "newValue": "New Dandiset Name" }
-- Update a contributor's affiliation: { "path": "contributor.0.affiliation.0.name", "newValue": "University of Science" }
-- Add a keyword: { "path": "keywords.3", "newValue": "neural-data" }
+You can apply multiple changes in a single call using the 'changes' array:
+{ "changes": [
+    { "operation": "set", "path": "name", "value": "New Name" },
+    { "operation": "append", "path": "keywords", "value": "neuroscience" },
+    { "operation": "delete", "path": "keywords.0" }
+  ],
+  "explanation": "Update name and keywords"
+}
+
+**Operations:**
+
+1. **set** - Set or update a value at any path
+   - Path: Any valid path (e.g., "name", "contributor.0.email")
+   - Requires: value
+
+2. **delete** - Remove an item from an array
+   - Path: Must end with an array index (e.g., "keywords.2", "contributor.1")
+   - No value required
+
+3. **insert** - Insert an item at a specific array position
+   - Path: Must end with an array index where item will be inserted
+   - Requires: value
+   - Items at and after this index shift right
+
+4. **append** - Add an item to the end of an array
+   - Path: Points to the array itself (e.g., "keywords", "contributor")
+   - Requires: value
+
+**Single Change Examples:**
+
+- Set the name:
+  { "operation": "set", "path": "name", "value": "New Dandiset Name" }
+
+- Update a contributor's email:
+  { "operation": "set", "path": "contributor.0.email", "value": "new@example.com" }
+
+- Delete the third keyword:
+  { "operation": "delete", "path": "keywords.2" }
+
+- Append a new keyword:
+  { "operation": "append", "path": "keywords", "value": "electrophysiology" }
+
+**Batch Change Example:**
+
+Apply multiple keyword changes at once:
+{ "changes": [
+    { "operation": "append", "path": "keywords", "value": "electrophysiology" },
+    { "operation": "append", "path": "keywords", "value": "calcium-imaging" },
+    { "operation": "append", "path": "keywords", "value": "mouse" }
+  ]
+}
 
 **Notes:**
 - Changes are not applied immediately; they are added to a pending changes list
 - Users can review all pending changes before committing them
-- The old value (if any) will be preserved for diff display
+- For backward compatibility, single change params (operation, path, value) are still supported
+- When using 'changes' array, each change is validated and applied independently
 
 **Read-only fields (cannot be modified):**
-The following fields are managed by the DANDI system and cannot be changed:
 id, schemaVersion, url, repository, identifier, dateCreated, dateModified,
 citation, assetsSummary, manifestLocation, version, access`;
   },
 };
+
+function getSuccessMessage(operation: MetadataOperationType, path: string): string {
+  switch (operation) {
+    case 'set':
+      return `Successfully proposed setting "${path}". The change is now pending user review.`;
+    case 'delete':
+      return `Successfully proposed deleting item at "${path}". The change is now pending user review.`;
+    case 'insert':
+      return `Successfully proposed inserting item at "${path}". The change is now pending user review.`;
+    case 'append':
+      return `Successfully proposed appending item to "${path}". The change is now pending user review.`;
+    default:
+      return `Successfully proposed change to "${path}". The change is now pending user review.`;
+  }
+}

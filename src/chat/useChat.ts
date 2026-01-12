@@ -80,14 +80,15 @@ const chatReducer = (state: Chat, action: ChatAction): Chat => {
 };
 
 interface UseChatOptions {
-  getMetadata: () => any;
-  addPendingChange: (path: string, oldValue: unknown, newValue: unknown) => void;
+  originalMetadata?: any;
+  modifiedMetadata?: any;
+  modifyMetadata: (operation: 'set' | 'delete' | 'insert' | 'append', path: string, value?: unknown) => boolean;
   dandisetId: string;
   version: string;
 }
 
 const useChat = (options: UseChatOptions) => {
-  const { getMetadata, addPendingChange, dandisetId, version } = options;
+  const { originalMetadata, modifiedMetadata, modifyMetadata, dandisetId, version } = options;
 
   const [chat, setChat] = useState<Chat>(emptyChat);
   const [responding, setResponding] = useState<boolean>(false);
@@ -136,14 +137,14 @@ const useChat = (options: UseChatOptions) => {
 
   const toolExecutionContext: ToolExecutionContext = useMemo(
     () => ({
-      getMetadata,
-      addPendingChange,
+      originalMetadata,
+      modifiedMetadata,
+      modifyMetadata,
     }),
-    [getMetadata, addPendingChange]
+    [originalMetadata, modifiedMetadata, modifyMetadata]
   );
 
   const buildSystemPrompt = useCallback(() => {
-    const metadata = getMetadata();
     const parts: string[] = [];
 
     parts.push(`You are a helpful AI assistant for editing DANDI Archive dandiset metadata.
@@ -194,14 +195,24 @@ Current context:
 - Version: ${version || "(not loaded)"}
 `);
 
-    if (metadata) {
-      parts.push(`Current Metadata (JSON):
+    if (originalMetadata) {
+      parts.push(`Original Metadata (JSON):
 \`\`\`json
-${JSON.stringify(metadata, null, 2)}
+${JSON.stringify(originalMetadata, null, 2)}
 \`\`\`
 `);
     } else {
       parts.push("No metadata is currently loaded.");
+    }
+
+    if (modifiedMetadata) {
+      parts.push(`Current (modified) Metadata (JSON):
+\`\`\`json
+${JSON.stringify(modifiedMetadata, null, 2)}
+\`\`\`
+`);
+    } else {
+      parts.push("No modifications have been made to the metadata.");
     }
 
     parts.push(`Guidelines:
@@ -244,7 +255,7 @@ Available tools:
     }
 
     return parts.join("\n\n");
-  }, [getMetadata, dandisetId, version, tools, metadataDocs, dandisetSchema]);
+  }, [originalMetadata, modifiedMetadata, dandisetId, version, tools, metadataDocs, dandisetSchema]);
 
   const generateResponse = useCallback(
     async (currentChat: Chat) => {
@@ -355,8 +366,7 @@ Available tools:
 
   // Fetch initial suggestions when metadata is loaded
   const fetchInitialSuggestions = useCallback(async () => {
-    const metadata = getMetadata();
-    if (!metadata || !dandisetId) return;
+    if (!originalMetadata || !modifiedMetadata || !dandisetId) return;
 
     // Prevent duplicate requests for the same dandiset
     const requestKey = `${dandisetId}-${version}`;
@@ -445,15 +455,14 @@ Available tools:
     } finally {
       setLoadingInitialSuggestions(false);
     }
-  }, [getMetadata, dandisetId, version, buildSystemPrompt]);
+  }, [originalMetadata, modifiedMetadata, dandisetId, version, buildSystemPrompt]);
 
   // Trigger initial suggestions fetch when metadata is available
   useEffect(() => {
-    const metadata = getMetadata();
-    if (metadata && dandisetId && chat.messages.length === 0) {
+    if (originalMetadata && modifiedMetadata && dandisetId && chat.messages.length === 0) {
       fetchInitialSuggestions();
     }
-  }, [getMetadata, dandisetId, chat.messages.length, fetchInitialSuggestions]);
+  }, [originalMetadata, modifiedMetadata, dandisetId, chat.messages.length, fetchInitialSuggestions]);
 
   // Get current suggestions (from last assistant message or initial suggestions)
   const currentSuggestions = useMemo(() => {

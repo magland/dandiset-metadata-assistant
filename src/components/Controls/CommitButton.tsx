@@ -8,33 +8,26 @@ import { commitMetadataChanges, fetchDandisetVersionInfo } from '../../utils/api
 
 export function CommitButton() {
   const { 
-    pendingChanges, 
-    clearPendingChanges, 
     apiKey, 
     versionInfo,
     dandisetId,
     version,
-    getModifiedMetadata,
     setVersionInfo,
     setIsLoading,
+    originalMetadata,
+    modifiedMetadata,
+    clearModifications
   } = useMetadataContext();
 
   const [isCommitting, setIsCommitting] = useState(false);
   const [commitError, setCommitError] = useState<string | null>(null);
   const [commitSuccess, setCommitSuccess] = useState(false);
 
-  const hasChanges = pendingChanges.length > 0;
+  const hasChanges = JSON.stringify(originalMetadata) !== JSON.stringify(modifiedMetadata);
   const canCommit = hasChanges && !!apiKey && !!versionInfo;
 
   const handleCommit = async () => {
     if (!apiKey || !versionInfo || !dandisetId || !version) {
-      return;
-    }
-
-    // Get the modified metadata with all pending changes applied
-    const modifiedMetadata = getModifiedMetadata();
-    if (!modifiedMetadata) {
-      setCommitError('Failed to generate modified metadata');
       return;
     }
 
@@ -46,7 +39,7 @@ export function CommitButton() {
       await commitMetadataChanges(dandisetId, version, modifiedMetadata, apiKey);
 
       // Success! Clear pending changes
-      clearPendingChanges();
+      clearModifications();
       setCommitSuccess(true);
 
       // Refresh the version info to get the latest state
@@ -72,7 +65,7 @@ export function CommitButton() {
 
   const handleDiscard = () => {
     if (window.confirm('Are you sure you want to discard all pending changes?')) {
-      clearPendingChanges();
+      clearModifications();
     }
   };
 
@@ -85,12 +78,11 @@ export function CommitButton() {
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
         {/* Pending changes indicator */}
         {hasChanges && (
-          <Typography variant="body2" color="primary">
-            <Badge badgeContent={pendingChanges.length} color="primary" sx={{ mr: 1 }}>
-              <span />
-            </Badge>
-            {pendingChanges.length} pending change{pendingChanges.length !== 1 ? 's' : ''}
-          </Typography>
+          <Badge color="secondary" variant="dot">
+            <Typography variant="body2" color="textSecondary">
+              You have pending changes
+            </Typography>
+          </Badge>
         )}
 
         {/* Discard button */}

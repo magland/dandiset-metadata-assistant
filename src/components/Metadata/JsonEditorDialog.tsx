@@ -20,6 +20,7 @@ import {
   getCachedSchema,
   getReadOnlyFields,
 } from "../../schemas/schemaService";
+import { computeDiff } from "../../core/metadataDiff";
 
 interface JsonEditorDialogProps {
   open: boolean;
@@ -42,84 +43,11 @@ function filterEditableFields(
   return filtered;
 }
 
-/**
- * Recursively compare two values and generate a list of changed paths
- */
-function generateDiffs(
-  oldObj: unknown,
-  newObj: unknown,
-  basePath: string = ""
-): Array<{ path: string; oldValue: unknown; newValue: unknown }> {
-  const diffs: Array<{ path: string; oldValue: unknown; newValue: unknown }> =
-    [];
-
-  // Handle null/undefined cases
-  if (oldObj === newObj) return diffs;
-  if (oldObj === null || oldObj === undefined) {
-    if (newObj !== null && newObj !== undefined) {
-      diffs.push({ path: basePath, oldValue: oldObj, newValue: newObj });
-    }
-    return diffs;
-  }
-  if (newObj === null || newObj === undefined) {
-    diffs.push({ path: basePath, oldValue: oldObj, newValue: newObj });
-    return diffs;
-  }
-
-  // Handle different types
-  if (typeof oldObj !== typeof newObj) {
-    diffs.push({ path: basePath, oldValue: oldObj, newValue: newObj });
-    return diffs;
-  }
-
-  // Handle arrays
-  if (Array.isArray(oldObj) && Array.isArray(newObj)) {
-    // If arrays have different lengths or any element is different,
-    // treat the whole array as changed at the top level
-    if (JSON.stringify(oldObj) !== JSON.stringify(newObj)) {
-      diffs.push({ path: basePath, oldValue: oldObj, newValue: newObj });
-    }
-    return diffs;
-  }
-
-  // Handle objects
-  if (typeof oldObj === "object" && typeof newObj === "object") {
-    const oldKeys = Object.keys(oldObj as object);
-    const newKeys = Object.keys(newObj as object);
-    const allKeys = new Set([...oldKeys, ...newKeys]);
-
-    for (const key of allKeys) {
-      const oldVal = (oldObj as Record<string, unknown>)[key];
-      const newVal = (newObj as Record<string, unknown>)[key];
-      const newPath = basePath ? `${basePath}.${key}` : key;
-
-      // For top-level fields, compare the whole value
-      if (!basePath) {
-        if (JSON.stringify(oldVal) !== JSON.stringify(newVal)) {
-          diffs.push({ path: newPath, oldValue: oldVal, newValue: newVal });
-        }
-      } else {
-        // For nested fields, recurse
-        diffs.push(...generateDiffs(oldVal, newVal, newPath));
-      }
-    }
-    return diffs;
-  }
-
-  // Handle primitives
-  if (oldObj !== newObj) {
-    diffs.push({ path: basePath, oldValue: oldObj, newValue: newObj });
-  }
-
-  return diffs;
-}
-
 export function JsonEditorDialog({ open, onClose }: JsonEditorDialogProps) {
   const {
     versionInfo,
-    getModifiedMetadata,
-    addPendingChange,
-    clearPendingChanges,
+    modifiedMetadata,
+    setModifiedMetadata
   } = useMetadataContext();
 
   const [jsonText, setJsonText] = useState("");
@@ -132,7 +60,7 @@ export function JsonEditorDialog({ open, onClose }: JsonEditorDialogProps) {
   // Initialize JSON text when dialog opens (filter out readOnly fields)
   useEffect(() => {
     if (open && versionInfo) {
-      const currentMetadata = getModifiedMetadata();
+      const currentMetadata = modifiedMetadata;
       if (currentMetadata) {
         // Get readOnly fields from schema
         const schema = getCachedSchema();
@@ -151,7 +79,7 @@ export function JsonEditorDialog({ open, onClose }: JsonEditorDialogProps) {
         setChangeCount(0);
       }
     }
-  }, [open, versionInfo, getModifiedMetadata]);
+  }, [open, versionInfo, modifiedMetadata]);
 
   // Validate JSON as user types
   const handleJsonChange = useCallback(
@@ -164,14 +92,14 @@ export function JsonEditorDialog({ open, onClose }: JsonEditorDialogProps) {
         const parsed = JSON.parse(text);
         setParseError(null);
 
-        // Count changes against filtered original (sync operation)
+        // Count changes against filtered original using shared diff utility
         const original = versionInfo?.metadata;
         if (original) {
           const filteredOriginal = filterEditableFields(
             original as unknown as Record<string, unknown>,
             readOnlyFields
           );
-          const diffs = generateDiffs(filteredOriginal, parsed);
+          const diffs = computeDiff(filteredOriginal, parsed);
           setChangeCount(diffs.length);
         }
 
@@ -207,20 +135,11 @@ export function JsonEditorDialog({ open, onClose }: JsonEditorDialogProps) {
     if (parseError || !versionInfo) return;
 
     try {
-      const newMetadata = JSON.parse(jsonText);
-      const original = versionInfo.metadata as unknown as Record<string, unknown>;
-
-      // Filter original to only editable fields for comparison
-      const filteredOriginal = filterEditableFields(original, readOnlyFields);
-
-      // Clear existing pending changes and apply new ones
-      clearPendingChanges();
-
-      // Generate diffs and add as pending changes (only for editable fields)
-      const diffs = generateDiffs(filteredOriginal, newMetadata);
-      for (const diff of diffs) {
-        addPendingChange(diff.path, diff.oldValue, diff.newValue);
+      const mergedMetadata = {
+        ...(versionInfo.metadata as unknown as Record<string, unknown>),
+        ...JSON.parse(jsonText),
       }
+      setModifiedMetadata(mergedMetadata);
 
       onClose();
     } catch (err) {
@@ -229,13 +148,11 @@ export function JsonEditorDialog({ open, onClose }: JsonEditorDialogProps) {
       );
     }
   }, [
-    jsonText,
     parseError,
     versionInfo,
-    readOnlyFields,
-    clearPendingChanges,
-    addPendingChange,
-    onClose,
+    jsonText,
+    setModifiedMetadata,
+    onClose
   ]);
 
   // Reset to original (filtered)

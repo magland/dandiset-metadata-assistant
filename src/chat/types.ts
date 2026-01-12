@@ -78,9 +78,12 @@ export type CompletionRequest = {
   app?: string;
 };
 
+export type MetadataOperationType = 'set' | 'delete' | 'insert' | 'append';
+
 export interface ToolExecutionContext {
-  addPendingChange: (path: string, oldValue: unknown, newValue: unknown) => void;
-  getMetadata: () => any;
+  modifyMetadata: (operation: MetadataOperationType, path: string, value?: unknown) => boolean;
+  originalMetadata: any;
+  modifiedMetadata: any;
 }
 
 export type QPFunctionDescription = {

@@ -79,9 +79,16 @@ function AppContent() {
     setVersionInfo,
     setIsLoading,
     setError,
-    clearPendingChanges,
+    clearModifications,
     apiKey,
+    setOriginalMetadata
   } = useMetadataContext();
+
+  useEffect(() => {
+    if (versionInfo && versionInfo.metadata) {
+      setOriginalMetadata(versionInfo.metadata);
+    }
+  }, [versionInfo, setOriginalMetadata]);
 
   // Load dandiset from URL on initial render
   useEffect(() => {
@@ -117,9 +124,9 @@ function AppContent() {
     setVersionInfo(null);
     setDandisetId('');
     setVersion('draft');
-    clearPendingChanges();
+    clearModifications();
     updateUrl(null);
-  }, [setVersionInfo, setDandisetId, setVersion, clearPendingChanges]);
+  }, [setVersionInfo, setDandisetId, setVersion, clearModifications]);
 
   // Show welcome page if no dandiset is loaded
   const showWelcome = !versionInfo && !dandisetId;
