@@ -205,7 +205,9 @@ function ObjectDisplay({ obj, modifiedPaths }: { obj: Record<string, unknown>; m
               {Array.isArray(value) ? (
                 value.length > 0 ? (
                   typeof value[0] === 'object' ? (
-                    `${value.length} item(s)`
+                    (value as Record<string, unknown>[])
+                      .map((item) => getObjectDisplayName(item))
+                      .join(', ')
                   ) : (
                     value.join(', ')
                   )
