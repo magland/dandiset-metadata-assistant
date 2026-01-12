@@ -93,22 +93,23 @@ export function JsonEditorDialog({ open, onClose }: JsonEditorDialogProps) {
         setParseError(null);
 
         // Count changes against filtered original using shared diff utility
-        const original = versionInfo?.metadata;
-        if (original) {
-          const filteredOriginal = filterEditableFields(
-            original as unknown as Record<string, unknown>,
+        // const original = versionInfo?.metadata;
+        const startingMetadata = modifiedMetadata;
+        if (startingMetadata) {
+          const filteredStartingMetadata = filterEditableFields(
+            startingMetadata as unknown as Record<string, unknown>,
             readOnlyFields
           );
-          const diffs = computeDiff(filteredOriginal, parsed);
+          const diffs = computeDiff(filteredStartingMetadata, parsed);
           setChangeCount(diffs.length);
         }
 
         // Validate against schema (async to ensure schema is loaded)
-        // Add back readOnly fields from original for validation
+        // Add back readOnly fields from starting for validation
         setIsValidating(true);
         try {
-          const fullMetadata = original
-            ? { ...original, ...parsed }
+          const fullMetadata = startingMetadata
+            ? { ...startingMetadata, ...parsed }
             : parsed;
           const validation = await validateFullMetadataAsync(fullMetadata);
           if (!validation.valid) {
@@ -155,7 +156,7 @@ export function JsonEditorDialog({ open, onClose }: JsonEditorDialogProps) {
     onClose
   ]);
 
-  // Reset to original (filtered)
+  // Reset to starting (filtered)
   const handleReset = useCallback(() => {
     if (versionInfo?.metadata) {
       const editableMetadata = filterEditableFields(
