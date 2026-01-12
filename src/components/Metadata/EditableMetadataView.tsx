@@ -599,7 +599,7 @@ export function EditableMetadataView() {
           Editable Metadata
         </Typography>
         <Typography variant="body2" color="text.secondary">
-          Review and modify the metadata fields below. Fields highlighted in{' '}
+          Review the metadata fields below. Fields highlighted in{' '}
           <Box
             component="span"
             sx={{
