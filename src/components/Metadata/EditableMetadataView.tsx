@@ -27,6 +27,9 @@ import LibraryBooksIcon from '@mui/icons-material/LibraryBooks';
 import AccountTreeIcon from '@mui/icons-material/AccountTree';
 import { useMetadataContext } from '../../context/MetadataContext';
 import { computeDelta, deltaToChanges } from '../../core/metadataDiff';
+import { EditableTextField } from './EditableTextField';
+import { EditableKeywordsList } from './EditableKeywordsList';
+import { EditableLicenseSelect, LICENSE_OPTIONS } from './EditableLicenseSelect';
 
 // Field definition type
 interface FieldDef {
@@ -102,6 +105,7 @@ interface FieldDisplayProps {
   type: string;
   icon?: React.ComponentType<{ sx?: object }>;
   onRevert?: () => void;
+  onEdit?: (value: unknown) => void;
 }
 
 /**
@@ -347,12 +351,17 @@ function formatFieldLabel(key: string): string {
 /**
  * Single field display component
  */
-function FieldDisplay({ title, value, isModified, type, icon: Icon, onRevert }: FieldDisplayProps) {
+function FieldDisplay({ fieldKey, title, value, isModified, type, icon: Icon, onRevert, onEdit }: FieldDisplayProps) {
   const isEmpty =
     value === null ||
     value === undefined ||
     (Array.isArray(value) && value.length === 0) ||
     (typeof value === 'string' && !value);
+
+  // Determine if this field is editable
+  const isEditableText = fieldKey === 'name' || fieldKey === 'description';
+  const useDialog = fieldKey === 'description'; // Description uses dialog due to length
+  const maxLength = fieldKey === 'name' ? 150 : fieldKey === 'description' ? 10000 : undefined;
 
   return (
     <Box
@@ -381,6 +390,17 @@ function FieldDisplay({ title, value, isModified, type, icon: Icon, onRevert }: 
         >
           {title}
         </Typography>
+        {/* Edit button for editable text fields */}
+        {isEditableText && onEdit && (
+          <EditableTextField
+            value={value as string}
+            onSave={(newValue) => onEdit(newValue)}
+            label={title}
+            maxLength={maxLength}
+            multiline={fieldKey === 'description'}
+            useDialog={useDialog}
+          />
+        )}
         {isModified && (
           <>
             <Chip
@@ -424,6 +444,14 @@ function FieldDisplay({ title, value, isModified, type, icon: Icon, onRevert }: 
 }
 
 /**
+ * Helper to format license value for display
+ */
+function formatLicenseValue(license: string): string {
+  const option = LICENSE_OPTIONS.find((opt) => opt.value === license);
+  return option ? option.label : license;
+}
+
+/**
  * Renders a single section with its fields
  */
 function SectionDisplay({
@@ -432,12 +460,14 @@ function SectionDisplay({
   changedPaths,
   isFieldModified,
   revertField,
+  onEditField,
 }: {
   section: SectionDef;
   modifiedMetadata: Record<string, unknown>;
   changedPaths: Set<string>;
   isFieldModified: (key: string) => boolean;
   revertField: (key: string) => void;
+  onEditField: (key: string, value: unknown) => void;
 }) {
   const SectionIcon = section.icon;
   
@@ -496,6 +526,140 @@ function SectionDisplay({
           const value = modifiedMetadata[field.key];
           const modified = isFieldModified(field.key);
           const FieldIcon = field.icon;
+          
+          // Handle keywords field specially
+          if (field.key === 'keywords') {
+            return (
+              <Box key={field.key}>
+                {idx > 0 && <Divider sx={{ my: 1.5 }} />}
+                <Box
+                  sx={{
+                    py: 1.5,
+                    px: 2,
+                    backgroundColor: modified ? MODIFIED_BG : 'transparent',
+                    borderLeft: modified ? `3px solid ${MODIFIED_BORDER}` : '3px solid transparent',
+                    borderRadius: 1,
+                    mb: 1,
+                    transition: 'all 0.2s ease',
+                    '&:hover': {
+                      backgroundColor: modified ? MODIFIED_BG : 'rgba(0, 0, 0, 0.02)',
+                    },
+                  }}
+                >
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, mb: 0.75 }}>
+                    <FieldIcon sx={{ fontSize: 16, color: 'text.secondary' }} />
+                    <Typography
+                      variant="subtitle2"
+                      sx={{
+                        fontWeight: 600,
+                        color: 'text.primary',
+                        fontSize: '0.85rem',
+                      }}
+                    >
+                      {field.title}
+                    </Typography>
+                    <EditableKeywordsList
+                      value={value as string[]}
+                      onSave={(newValue) => onEditField(field.key, newValue)}
+                    />
+                    {modified && (
+                      <>
+                        <Chip
+                          label="modified"
+                          size="small"
+                          color="warning"
+                          sx={{ fontSize: '0.65rem', height: 20, ml: 0.5 }}
+                        />
+                        <Tooltip title="Revert to original">
+                          <IconButton size="small" onClick={() => revertField(field.key)} sx={{ p: 0.25, ml: 0.5 }}>
+                            <UndoIcon sx={{ fontSize: 16 }} />
+                          </IconButton>
+                        </Tooltip>
+                      </>
+                    )}
+                  </Box>
+                  <StringArrayDisplay values={value as string[]} isModified={modified} />
+                </Box>
+              </Box>
+            );
+          }
+          
+          // Handle license field specially
+          if (field.key === 'license') {
+            const licenseValues = value as string[] | null | undefined;
+            return (
+              <Box key={field.key}>
+                {idx > 0 && <Divider sx={{ my: 1.5 }} />}
+                <Box
+                  sx={{
+                    py: 1.5,
+                    px: 2,
+                    backgroundColor: modified ? MODIFIED_BG : 'transparent',
+                    borderLeft: modified ? `3px solid ${MODIFIED_BORDER}` : '3px solid transparent',
+                    borderRadius: 1,
+                    mb: 1,
+                    transition: 'all 0.2s ease',
+                    '&:hover': {
+                      backgroundColor: modified ? MODIFIED_BG : 'rgba(0, 0, 0, 0.02)',
+                    },
+                  }}
+                >
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, mb: 0.75 }}>
+                    <FieldIcon sx={{ fontSize: 16, color: 'text.secondary' }} />
+                    <Typography
+                      variant="subtitle2"
+                      sx={{
+                        fontWeight: 600,
+                        color: 'text.primary',
+                        fontSize: '0.85rem',
+                      }}
+                    >
+                      {field.title}
+                    </Typography>
+                    <EditableLicenseSelect
+                      value={licenseValues}
+                      onSave={(newValue) => onEditField(field.key, newValue)}
+                    />
+                    {modified && (
+                      <>
+                        <Chip
+                          label="modified"
+                          size="small"
+                          color="warning"
+                          sx={{ fontSize: '0.65rem', height: 20, ml: 0.5 }}
+                        />
+                        <Tooltip title="Revert to original">
+                          <IconButton size="small" onClick={() => revertField(field.key)} sx={{ p: 0.25, ml: 0.5 }}>
+                            <UndoIcon sx={{ fontSize: 16 }} />
+                          </IconButton>
+                        </Tooltip>
+                      </>
+                    )}
+                  </Box>
+                  {licenseValues && licenseValues.length > 0 ? (
+                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                      {licenseValues.map((license, licIdx) => (
+                        <Chip
+                          key={licIdx}
+                          label={formatLicenseValue(license)}
+                          size="small"
+                          sx={{
+                            backgroundColor: modified ? MODIFIED_BG : undefined,
+                            borderColor: modified ? MODIFIED_BORDER : undefined,
+                          }}
+                          variant={modified ? 'outlined' : 'filled'}
+                        />
+                      ))}
+                    </Box>
+                  ) : (
+                    <Typography variant="body2" color="text.secondary" fontStyle="italic">
+                      Not specified
+                    </Typography>
+                  )}
+                </Box>
+              </Box>
+            );
+          }
           
           if (field.type === 'array') {
             return (
@@ -568,6 +732,7 @@ function SectionDisplay({
                 type={field.type}
                 icon={FieldIcon}
                 onRevert={() => revertField(field.key)}
+                onEdit={(newValue) => onEditField(field.key, newValue)}
               />
             </Box>
           );
@@ -581,7 +746,7 @@ function SectionDisplay({
  * Main component for displaying editable metadata with change highlighting
  */
 export function EditableMetadataView() {
-  const { originalMetadata, modifiedMetadata, revertField } = useMetadataContext();
+  const { originalMetadata, modifiedMetadata, revertField, modifyMetadata } = useMetadataContext();
   
   // Compute changed paths
   const changedPaths = useMemo(() => {
@@ -606,6 +771,11 @@ export function EditableMetadataView() {
     return Array.from(changedPaths).some(
       (p) => p === fieldKey || p.startsWith(`${fieldKey}.`) || p.startsWith(`${fieldKey}[`)
     );
+  };
+  
+  // Handler for editing fields
+  const handleEditField = (fieldKey: string, value: unknown) => {
+    modifyMetadata('set', fieldKey, value);
   };
   
   // Count total modifications
@@ -643,7 +813,7 @@ export function EditableMetadataView() {
           >
             yellow
           </Box>{' '}
-          have been modified from the original.
+          have been modified from the original. Click the edit icon to modify fields directly.
         </Typography>
         {modifiedCount > 0 && (
           <Chip
@@ -664,6 +834,7 @@ export function EditableMetadataView() {
           changedPaths={changedPaths}
           isFieldModified={isFieldModified}
           revertField={revertField}
+          onEditField={handleEditField}
         />
       ))}
     </Box>
