@@ -105,12 +105,10 @@ async function handleCommit(request: Request): Promise<Response> {
     }
     
     // Validate metadata against JSON schema
-    console.log(`Validating metadata for dandiset ${dandisetId} version ${version}`);
     const validationResult = await validateMetadata(metadata);
     
     if (!validationResult.valid) {
       const errorMessage = formatValidationErrors(validationResult.errors);
-      console.log(`Validation failed: ${errorMessage}`);
       
       return new Response(
         JSON.stringify({ 
@@ -124,8 +122,6 @@ async function handleCommit(request: Request): Promise<Response> {
         }
       );
     }
-    
-    console.log(`Validation passed. Forwarding to DANDI API...`);
     
     // Forward to DANDI API
     const dandiUrl = `${DANDI_API_BASE}/dandisets/${dandisetId}/versions/${version}/`;
@@ -153,8 +149,6 @@ async function handleCommit(request: Request): Promise<Response> {
     
     // Check if DANDI request was successful
     if (!dandiResponse.ok) {
-      console.log(`DANDI API error (${dandiResponse.status}): ${responseText}`);
-      
       return new Response(
         JSON.stringify({ 
           error: 'DANDI API request failed',

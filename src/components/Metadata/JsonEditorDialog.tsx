@@ -42,6 +42,19 @@ function filterEditableFields(
   return filtered;
 }
 
+function filterReadOnlyFields(
+  metadata: Record<string, unknown>,
+  readOnlyFields: Set<string>
+): Record<string, unknown> {
+  const filtered: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(metadata)) {
+    if (readOnlyFields.has(key)) {
+      filtered[key] = value;
+    }
+  }
+  return filtered;
+}
+
 export function JsonEditorDialog({ open, onClose }: JsonEditorDialogProps) {
   const {
     versionInfo,
@@ -50,7 +63,6 @@ export function JsonEditorDialog({ open, onClose }: JsonEditorDialogProps) {
   } = useMetadataContext();
 
   const [jsonText, setJsonText] = useState("");
-  const [readOnlyFields, setReadOnlyFields] = useState<Set<string>>(new Set());
 
   // Initialize JSON text when dialog opens (filter out readOnly fields)
   useEffect(() => {
@@ -60,7 +72,6 @@ export function JsonEditorDialog({ open, onClose }: JsonEditorDialogProps) {
         // Get readOnly fields from schema
         const schema = getCachedSchema();
         const roFields = schema ? getReadOnlyFields(schema) : new Set<string>();
-        setReadOnlyFields(roFields);
 
         // Filter out readOnly fields for editing
         const editableMetadata = filterEditableFields(
@@ -68,6 +79,7 @@ export function JsonEditorDialog({ open, onClose }: JsonEditorDialogProps) {
           roFields
         );
 
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         setJsonText(JSON.stringify(editableMetadata, null, 2));
       }
     }
@@ -88,20 +100,6 @@ export function JsonEditorDialog({ open, onClose }: JsonEditorDialogProps) {
       };
     }
   }, [jsonText]);
-
-  // Compute validation errors from parsed JSON
-  const validationErrors = useMemo(() => {
-    if (parseError || !parsedJson || !modifiedMetadata) {
-      return null;
-    }
-    // Combine with existing metadata for full validation
-    const fullMetadata = { ...modifiedMetadata, ...parsedJson };
-    const validation = validateFullMetadata(fullMetadata);
-    if (!validation.valid) {
-      return formatValidationErrors(validation.errors);
-    }
-    return null;
-  }, [parseError, parsedJson, modifiedMetadata]);
 
   // Handle text change (just update state, validation happens via useMemo)
   const handleJsonChange = useCallback(
@@ -132,13 +130,37 @@ export function JsonEditorDialog({ open, onClose }: JsonEditorDialogProps) {
   // Reset to starting (filtered)
   const handleReset = useCallback(() => {
     if (versionInfo?.metadata) {
+      const readOnlyFields = getReadOnlyFields(getCachedSchema()!);
       const editableMetadata = filterEditableFields(
         versionInfo.metadata as unknown as Record<string, unknown>,
         readOnlyFields
       );
       setJsonText(JSON.stringify(editableMetadata, null, 2));
     }
-  }, [versionInfo, readOnlyFields]);
+  }, [versionInfo]);
+
+  const validationErrors = useMemo(() => {
+    if (parseError || !parsedJson || !versionInfo) return null;
+
+    const readonlyModifiedMetadata = filterReadOnlyFields(
+      modifiedMetadata as unknown as Record<string, unknown>,
+      getReadOnlyFields(getCachedSchema()!)
+    );
+
+    // Merge parsed JSON with original metadata to restore readOnly fields
+    const fullMetadata = {
+      ...readonlyModifiedMetadata,
+      ...parsedJson,
+    };
+    const validationResult = validateFullMetadata(
+      fullMetadata
+    );
+    if (!validationResult.valid) {
+      const formattedErrors = formatValidationErrors(validationResult.errors);
+      return formattedErrors.join("; ");
+    }
+    return null;
+  }, [parseError, parsedJson, versionInfo, modifiedMetadata]);
 
   const canApply = !parseError && !validationErrors;
 

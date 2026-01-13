@@ -153,14 +153,14 @@ export const proposeMetadataChangeTool: QPTool = {
       }
 
       // Apply the operation
-      const success = context.modifyMetadata(operation, path, value);
+      const modifyResult = context.modifyMetadata(operation, path, value);
 
-      if (!success) {
+      if (!modifyResult.success) {
         results.push({
           success: false,
           index: i,
           path,
-          error: `Failed to apply ${operation} operation at path "${path}".`,
+          error: modifyResult.error || `Failed to apply ${operation} operation at path "${path}".`,
         });
         allSucceeded = false;
         continue;
