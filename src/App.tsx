@@ -57,11 +57,12 @@ const theme = createTheme({
   },
 });
 
-// Parse URL for dandiset ID
-function getUrlParams(): { dandisetId: string | null } {
+// Parse URL for dandiset ID and review mode
+function getUrlParams(): { dandisetId: string | null; isReviewMode: boolean } {
   const params = new URLSearchParams(window.location.search);
   return {
     dandisetId: params.get('dandiset'),
+    isReviewMode: params.get('review') === '1',
   };
 }
 
@@ -75,6 +76,17 @@ function updateUrl(dandisetId: string | null) {
   }
   // Clean up any old version params
   url.searchParams.delete('version');
+  window.history.replaceState({}, '', url.toString());
+}
+
+// Update URL review param without page reload
+function updateReviewParam(isReviewMode: boolean) {
+  const url = new URL(window.location.href);
+  if (isReviewMode) {
+    url.searchParams.set('review', '1');
+  } else {
+    url.searchParams.delete('review');
+  }
   window.history.replaceState({}, '', url.toString());
 }
 
@@ -95,9 +107,16 @@ function AppContent() {
 
   const [aboutDialogOpen, setAboutDialogOpen] = useState(false);
   const [proposalError, setProposalError] = useState<string | null>(null);
+  const [isReviewMode, setIsReviewMode] = useState(() => getUrlParams().isReviewMode);
   
   // Track if we have a pending proposal to apply after metadata loads
   const pendingProposalRef = useRef<ProposalData | null>(null);
+
+  // Handler to exit review mode
+  const handleExitReviewMode = useCallback(() => {
+    setIsReviewMode(false);
+    updateReviewParam(false);
+  }, []);
 
   useEffect(() => {
     if (versionInfo && versionInfo.metadata) {
@@ -280,13 +299,17 @@ function AppContent() {
 
       {/* Main Content */}
       <Box sx={{ flex: 1, overflow: 'hidden' }}>
-        <MainLayout
-          leftPanel={<ChatPanel />}
-          rightPanel={<MetadataPanel />}
-          initialLeftWidth={50}
-          minLeftWidth={25}
-          maxLeftWidth={75}
-        />
+        {isReviewMode ? (
+          <MetadataPanel isReviewMode={true} onExitReviewMode={handleExitReviewMode} />
+        ) : (
+          <MainLayout
+            leftPanel={<ChatPanel />}
+            rightPanel={<MetadataPanel />}
+            initialLeftWidth={50}
+            minLeftWidth={25}
+            maxLeftWidth={75}
+          />
+        )}
       </Box>
 
       {/* About Dialog */}

@@ -9,7 +9,11 @@ import { commitMetadataChanges, fetchDandisetVersionInfo } from '../../utils/api
 import { createProposalLink } from '../../core/proposalLink';
 import type { DandisetMetadata } from '../../types/dandiset';
 
-export function CommitButton() {
+interface CommitButtonProps {
+  isReviewMode?: boolean;
+}
+
+export function CommitButton({ isReviewMode = false }: CommitButtonProps) {
   const {
     apiKey,
     versionInfo,
@@ -106,8 +110,8 @@ export function CommitButton() {
   return (
     <>
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
-        {/* Pending changes indicator */}
-        {hasChanges && (
+        {/* Pending changes indicator - hidden in review mode */}
+        {!isReviewMode && hasChanges && (
           <Badge color="secondary" variant="dot">
             <Typography variant="body2" color="textSecondary">
               You have pending changes
@@ -115,38 +119,42 @@ export function CommitButton() {
           </Badge>
         )}
 
-        {/* Copy Proposal Link button */}
-        <Tooltip title={!hasChanges ? 'No changes to share' : 'Copy a shareable link with your proposed changes'}>
-          <span>
-            <IconButton
-              color="primary"
-              size="small"
-              onClick={handleCopyProposalLink}
-              disabled={!hasChanges || isCommitting}
-              sx={{
-                border: '1px solid',
-                borderColor: 'primary.main',
-                '&:disabled': {
-                  borderColor: 'action.disabled'
-                }
-              }}
-            >
-              <LinkIcon />
-            </IconButton>
-          </span>
-        </Tooltip>
+        {/* Copy Proposal Link button - hidden in review mode */}
+        {!isReviewMode && (
+          <Tooltip title={!hasChanges ? 'No changes to share' : 'Copy a shareable link with your proposed changes'}>
+            <span>
+              <IconButton
+                color="primary"
+                size="small"
+                onClick={handleCopyProposalLink}
+                disabled={!hasChanges || isCommitting}
+                sx={{
+                  border: '1px solid',
+                  borderColor: 'primary.main',
+                  '&:disabled': {
+                    borderColor: 'action.disabled'
+                  }
+                }}
+              >
+                <LinkIcon />
+              </IconButton>
+            </span>
+          </Tooltip>
+        )}
 
-        {/* Discard button */}
-        <Button
-          variant="outlined"
-          color="warning"
-          size="small"
-          startIcon={<DeleteSweepIcon />}
-          onClick={handleDiscard}
-          disabled={!hasChanges || isCommitting}
-        >
-          Discard All
-        </Button>
+        {/* Discard button - hidden in review mode */}
+        {!isReviewMode && (
+          <Button
+            variant="outlined"
+            color="warning"
+            size="small"
+            startIcon={<DeleteSweepIcon />}
+            onClick={handleDiscard}
+            disabled={!hasChanges || isCommitting}
+          >
+            Discard All
+          </Button>
+        )}
 
         {/* Commit button */}
         <Tooltip

@@ -257,6 +257,7 @@ export async function createProposalLink(
   const url = new URL(window.location.href);
   url.searchParams.set('dandiset', dandisetId);
   url.searchParams.set('proposal', base64);
+  url.searchParams.set('review', '1');
   // Remove any other params that shouldn't be shared
   url.searchParams.delete('version');
   
