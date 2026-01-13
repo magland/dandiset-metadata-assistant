@@ -100,18 +100,24 @@ export function MetadataProvider({ children }: { children: ReactNode }) {
     
     const newMetadata = result.data as DandisetMetadata;
     
-    // Validate against schema
-    const validationResult = validateFullMetadata(newMetadata);
-    if (!validationResult.valid) {
-      // Skip validation if schema is not loaded (indicated by schema-loading keyword)
-      const isSchemaNotLoaded = validationResult.errors.some(e => e.keyword === 'schema-loading');
-      if (!isSchemaNotLoaded) {
-        return {
-          success: false,
-          error: formatValidationErrors(validationResult.errors).join('\n')
-        };
+    // Only validate if the current metadata (before this change) was valid
+    // If it's already invalid, allow changes without validation
+    const currentIsValid = validateFullMetadata(currentMetadata).valid;
+    
+    if (currentIsValid) {
+      // Validate against schema
+      const validationResult = validateFullMetadata(newMetadata);
+      if (!validationResult.valid) {
+        // Skip validation if schema is not loaded (indicated by schema-loading keyword)
+        const isSchemaNotLoaded = validationResult.errors.some(e => e.keyword === 'schema-loading');
+        if (!isSchemaNotLoaded) {
+          return {
+            success: false,
+            error: formatValidationErrors(validationResult.errors).join('\n')
+          };
+        }
+        // Schema not loaded yet, allow the change (validation will happen on commit)
       }
-      // Schema not loaded yet, allow the change (validation will happen on commit)
     }
     
     modifiedMetadataRef.current = newMetadata;
