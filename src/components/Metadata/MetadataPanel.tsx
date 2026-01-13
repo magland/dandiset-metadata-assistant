@@ -54,7 +54,7 @@ export function MetadataPanel({ isReviewMode = false, onExitReviewMode }: Metada
               startIcon={<CloseIcon />}
               onClick={onExitReviewMode}
             >
-              Exit Review Mode
+              Edit
             </Button>
           )}
           {!isReviewMode && versionInfo && (
