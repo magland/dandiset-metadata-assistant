@@ -65,3 +65,12 @@ This project includes a Cloudflare Worker proxy server that enables metadata com
 - Vite
 - Material UI
 - Cloudflare Workers (proxy server)
+
+## License
+
+Apache 2.0
+
+## Authors
+
+- Jeremy Magland, Center for Computational Mathematics, Flatiron Institute
+- Ben Dichter, CatalystNeuro
