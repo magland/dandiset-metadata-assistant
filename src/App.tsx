@@ -96,16 +96,18 @@ function AppContent() {
     if (urlDandisetId && !versionInfo) {
       // Auto-load the dandiset from URL parameters (always use draft)
       const loadFromUrl = async () => {
+        // Set dandiset ID immediately so main layout shows with loading spinner
+        setDandisetId(urlDandisetId);
         setIsLoading(true);
         setError(null);
         try {
           const info = await fetchDandisetVersionInfo(urlDandisetId, 'draft', apiKey);
           setVersionInfo(info);
-          setDandisetId(urlDandisetId);
           setVersion('draft');
         } catch (err) {
           setError(err instanceof Error ? err.message : 'Failed to load dandiset from URL');
-          // Clear invalid URL params
+          // Clear dandiset ID and URL params on error
+          setDandisetId('');
           updateUrl(null);
         } finally {
           setIsLoading(false);

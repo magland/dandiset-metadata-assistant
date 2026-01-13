@@ -34,6 +34,7 @@ export function ChatPanel() {
     dandisetId,
     version,
     modifyMetadata,
+    isLoading,
   } = useMetadataContext();
 
   const {
@@ -231,26 +232,44 @@ export function ChatPanel() {
         }}
       >
         {!hasMetadata ? (
-          <Paper
-            elevation={0}
-            sx={{
-              p: 4,
-              textAlign: "center",
-              backgroundColor: "grey.50",
-              borderRadius: 2,
-              m: "auto",
-              maxWidth: 400,
-            }}
-          >
-            <SmartToyIcon sx={{ fontSize: 48, color: "grey.400", mb: 2 }} />
-            <Typography variant="h6" color="text.secondary" gutterBottom>
-              Load a Dandiset First
-            </Typography>
-            <Typography variant="body2" color="text.secondary">
-              Load a dandiset using the welcome page to start chatting with the
-              AI assistant about metadata.
-            </Typography>
-          </Paper>
+          isLoading ? (
+            <Box
+              sx={{
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                justifyContent: "center",
+                m: "auto",
+                gap: 2,
+              }}
+            >
+              <CircularProgress />
+              <Typography variant="body2" color="text.secondary">
+                Loading dandiset...
+              </Typography>
+            </Box>
+          ) : (
+            <Paper
+              elevation={0}
+              sx={{
+                p: 4,
+                textAlign: "center",
+                backgroundColor: "grey.50",
+                borderRadius: 2,
+                m: "auto",
+                maxWidth: 400,
+              }}
+            >
+              <SmartToyIcon sx={{ fontSize: 48, color: "grey.400", mb: 2 }} />
+              <Typography variant="h6" color="text.secondary" gutterBottom>
+                Load a Dandiset First
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                Load a dandiset using the welcome page to start chatting with the
+                AI assistant about metadata.
+              </Typography>
+            </Paper>
+          )
         ) : allMessages.length === 0 ? (
           <Paper
             elevation={0}
