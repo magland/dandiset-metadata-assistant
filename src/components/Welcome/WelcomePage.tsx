@@ -44,7 +44,7 @@ export function WelcomePage({ onDandisetLoaded }: WelcomePageProps) {
     setIsLoading,
     error,
     setError,
-    clearPendingChanges,
+    clearModifications,
     apiKey,
     setApiKey,
   } = useMetadataContext();
@@ -96,7 +96,7 @@ export function WelcomePage({ onDandisetLoaded }: WelcomePageProps) {
 
     setIsLoading(true);
     setError(null);
-    clearPendingChanges();
+    clearModifications();
 
     try {
       const info = await fetchDandisetVersionInfo(dandisetIdToLoad.trim(), 'draft', apiKey);

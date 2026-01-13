@@ -17,6 +17,7 @@
     "@mui/material": "^7.3.6",
     "ajv": "^8.17.1",
     "ajv-formats": "^3.0.1",
+    "jsondiffpatch": "^0.7.3",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "react-markdown": "^10.1.0",

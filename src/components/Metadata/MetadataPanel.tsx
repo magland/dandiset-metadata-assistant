@@ -1,16 +1,16 @@
-import { useState } from 'react';
-import { Box, Typography, CircularProgress, IconButton, Tooltip } from '@mui/material';
 import DescriptionIcon from '@mui/icons-material/Description';
 import EditIcon from '@mui/icons-material/Edit';
+import { Box, CircularProgress, IconButton, Tooltip, Typography } from '@mui/material';
+import { useState } from 'react';
 import { useMetadataContext } from '../../context/MetadataContext';
-import { DandisetInfo } from './DandisetInfo';
-import { ChangesSummary } from './ChangesSummary';
-import { MetadataDisplay } from './MetadataDisplay';
 import { CommitButton } from '../Controls/CommitButton';
+import { DandisetInfo } from './DandisetInfo';
 import { JsonEditorDialog } from './JsonEditorDialog';
+import { ChangesSummary } from './ChangesSummary';
+import { EditableMetadataView } from './EditableMetadataView';
 
 export function MetadataPanel() {
-  const { versionInfo, isLoading } = useMetadataContext();
+  const { versionInfo, isLoading, originalMetadata, modifiedMetadata } = useMetadataContext();
   const [editorOpen, setEditorOpen] = useState(false);
 
   return (
@@ -77,9 +77,14 @@ export function MetadataPanel() {
           </Box>
         ) : versionInfo ? (
           <>
+            {/* Dandiset Info */}
             <DandisetInfo />
-            <ChangesSummary />
-            <MetadataDisplay />
+
+            {/* Changes Summary - appears at top when there are pending changes */}
+            <ChangesSummary original={originalMetadata} modified={modifiedMetadata} />
+            
+            {/* Editable Metadata View */}
+            <EditableMetadataView />
           </>
         ) : (
           <Box

@@ -1,16 +1,13 @@
-import { createContext, useContext, useState, useCallback, useEffect, type ReactNode } from 'react';
-import type { DandisetVersionInfo, DandisetMetadata, PendingChange } from '../types/dandiset';
+/* eslint-disable @typescript-eslint/no-explicit-any */
+import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
 import { preloadSchema } from '../schemas/schemaService';
-
-/**
- * Normalize a path to use consistent dot notation for array indices.
- * Converts "foo[0].bar" to "foo.0.bar" and handles mixed notations.
- * This ensures paths from the tool (dot notation) match paths from the UI (bracket notation).
- */
-function normalizePath(path: string): string {
-  // Convert bracket notation [n] to dot notation .n
-  return path.replace(/\[(\d+)\]/g, '.$1');
-}
+import type { DandisetMetadata, DandisetVersionInfo } from '../types/dandiset';
+import {
+  applyOperation,
+  type MetadataOperationType,
+  normalizePath,
+  getValueAtPath
+} from '../core/metadataOperations';
 
 interface MetadataContextType {
   // Current dandiset info
@@ -29,19 +26,21 @@ interface MetadataContextType {
   error: string | null;
   setError: (error: string | null) => void;
   
-  // Pending changes
-  pendingChanges: PendingChange[];
-  addPendingChange: (path: string, oldValue: unknown, newValue: unknown) => void;
-  removePendingChange: (path: string) => void;
-  clearPendingChanges: () => void;
-  getPendingChangeForPath: (path: string) => PendingChange | undefined;
-  
   // API Key
   apiKey: string | null;
   setApiKey: (key: string | null) => void;
   
   // Get the current metadata with pending changes applied
-  getModifiedMetadata: () => DandisetMetadata | null;
+  originalMetadata: DandisetMetadata | null;
+  modifiedMetadata: DandisetMetadata | null;
+  setOriginalMetadata: (metadata: DandisetMetadata | null) => void;
+  setModifiedMetadata: (metadata: DandisetMetadata | null) => void;
+
+  clearModifications: () => void;
+
+  // Metadata modification functions
+  modifyMetadata: (operation: MetadataOperationType, path: string, value?: unknown) => boolean;
+  revertField: (fieldKey: string) => void;
 }
 
 const MetadataContext = createContext<MetadataContextType | undefined>(undefined);
@@ -50,13 +49,19 @@ export function MetadataProvider({ children }: { children: ReactNode }) {
   const [dandisetId, setDandisetId] = useState<string>('');
   const [version, setVersion] = useState<string>('draft');
   const [versionInfo, setVersionInfo] = useState<DandisetVersionInfo | null>(null);
+  const [originalMetadata, setOriginalMetadata] = useState<DandisetMetadata | null>(null);
+  const [modifiedMetadata, setModifiedMetadata] = useState<DandisetMetadata | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
-  const [pendingChanges, setPendingChanges] = useState<PendingChange[]>([]);
   const [apiKey, setApiKeyState] = useState<string | null>(() => {
     // Initialize from localStorage
     return localStorage.getItem('dandi-api-key');
   });
+
+  // if originalMetadata changes, reset modifiedMetadata
+  useEffect(() => {
+    setModifiedMetadata(originalMetadata);
+  }, [originalMetadata]);
 
   const setApiKey = useCallback((key: string | null) => {
     if (key) {
@@ -76,63 +81,49 @@ export function MetadataProvider({ children }: { children: ReactNode }) {
     }
   }, [versionInfo]);
 
-  const addPendingChange = useCallback((path: string, oldValue: unknown, newValue: unknown) => {
+  const modifyMetadata = useCallback((operation: MetadataOperationType, path: string, value?: unknown): boolean => {
     const normalizedPath = normalizePath(path);
-    setPendingChanges(prev => {
-      // Remove existing change for this path if any
-      const filtered = prev.filter(c => c.path !== normalizedPath);
-      // Add new change with normalized path
-      return [...filtered, { path: normalizedPath, oldValue, newValue }];
+    
+    setModifiedMetadata((modifiedMetadata) => {
+      if (modifiedMetadata === null) {
+        console.error('No modified metadata to apply operation to.');
+        return modifiedMetadata;
+      }
+      
+      const result = applyOperation(modifiedMetadata, operation, normalizedPath, value);
+      
+      if (!result.success) {
+        console.error('Metadata operation failed:', result.error);
+        return modifiedMetadata;
+      }
+      
+      return result.data as DandisetMetadata;
     });
+    return true;
   }, []);
 
-  const removePendingChange = useCallback((path: string) => {
-    const normalizedPath = normalizePath(path);
-    setPendingChanges(prev => prev.filter(c => c.path !== normalizedPath));
-  }, []);
+  const clearModifications = useCallback(() => {
+    setModifiedMetadata(originalMetadata);
+  }, [originalMetadata]);
 
-  const clearPendingChanges = useCallback(() => {
-    setPendingChanges([]);
-  }, []);
-
-  const getPendingChangeForPath = useCallback((path: string) => {
-    const normalizedPath = normalizePath(path);
-    return pendingChanges.find(c => c.path === normalizedPath);
-  }, [pendingChanges]);
-
-  const getModifiedMetadata = useCallback((): DandisetMetadata | null => {
-    if (!versionInfo) return null;
-
-    // Deep clone the metadata
-    const modified = JSON.parse(JSON.stringify(versionInfo.metadata)) as DandisetMetadata;
-
-    // Apply pending changes
-    for (const change of pendingChanges) {
-      const pathParts = change.path.split('.');
-      let current: unknown = modified;
-
-      for (let i = 0; i < pathParts.length - 1; i++) {
-        const part = pathParts[i];
-        const nextPart = pathParts[i + 1];
-        if (current && typeof current === 'object') {
-          const obj = current as Record<string, unknown>;
-          // Create intermediate objects/arrays if they don't exist
-          if (obj[part] === undefined || obj[part] === null) {
-            // Check if next part is a numeric index to decide array vs object
-            obj[part] = /^\d+$/.test(nextPart) ? [] : {};
-          }
-          current = obj[part];
-        }
-      }
-
-      const lastPart = pathParts[pathParts.length - 1];
-      if (current && typeof current === 'object') {
-        (current as Record<string, unknown>)[lastPart] = change.newValue;
-      }
+  const revertField = useCallback((fieldKey: string) => {
+    if (!originalMetadata || !modifiedMetadata) return;
+    
+    const originalValue = getValueAtPath(originalMetadata, fieldKey);
+    const result = applyOperation(modifiedMetadata, 'set', fieldKey, originalValue);
+    
+    if (result.success) {
+      setModifiedMetadata(result.data as DandisetMetadata);
     }
+  }, [originalMetadata, modifiedMetadata]);
 
-    return modified;
-  }, [versionInfo, pendingChanges]);
+  const setOriginalMetadata1 = useCallback((metadata: DandisetMetadata | null) => {
+    setOriginalMetadata(metadata);
+  }, []);
+
+  const setModifiedMetadata1 = useCallback((metadata: DandisetMetadata | null) => {
+    setModifiedMetadata(metadata);
+  }, []);
 
   const value: MetadataContextType = {
     dandisetId,
@@ -145,14 +136,15 @@ export function MetadataProvider({ children }: { children: ReactNode }) {
     setIsLoading,
     error,
     setError,
-    pendingChanges,
-    addPendingChange,
-    removePendingChange,
-    clearPendingChanges,
-    getPendingChangeForPath,
+    modifyMetadata,
+    revertField,
     apiKey,
     setApiKey,
-    getModifiedMetadata,
+    originalMetadata,
+    modifiedMetadata,
+    setOriginalMetadata: setOriginalMetadata1,
+    setModifiedMetadata: setModifiedMetadata1,
+    clearModifications
   };
 
   return (

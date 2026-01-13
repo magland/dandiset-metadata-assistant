@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import {
   Dialog,
   DialogTitle,
@@ -13,7 +13,7 @@ import {
 import CloseIcon from "@mui/icons-material/Close";
 import { useMetadataContext } from "../../context/MetadataContext";
 import {
-  validateFullMetadataAsync,
+  validateFullMetadata,
   formatValidationErrors,
 } from "../../schemas/validateMetadata";
 import {
@@ -42,97 +42,20 @@ function filterEditableFields(
   return filtered;
 }
 
-/**
- * Recursively compare two values and generate a list of changed paths
- */
-function generateDiffs(
-  oldObj: unknown,
-  newObj: unknown,
-  basePath: string = ""
-): Array<{ path: string; oldValue: unknown; newValue: unknown }> {
-  const diffs: Array<{ path: string; oldValue: unknown; newValue: unknown }> =
-    [];
-
-  // Handle null/undefined cases
-  if (oldObj === newObj) return diffs;
-  if (oldObj === null || oldObj === undefined) {
-    if (newObj !== null && newObj !== undefined) {
-      diffs.push({ path: basePath, oldValue: oldObj, newValue: newObj });
-    }
-    return diffs;
-  }
-  if (newObj === null || newObj === undefined) {
-    diffs.push({ path: basePath, oldValue: oldObj, newValue: newObj });
-    return diffs;
-  }
-
-  // Handle different types
-  if (typeof oldObj !== typeof newObj) {
-    diffs.push({ path: basePath, oldValue: oldObj, newValue: newObj });
-    return diffs;
-  }
-
-  // Handle arrays
-  if (Array.isArray(oldObj) && Array.isArray(newObj)) {
-    // If arrays have different lengths or any element is different,
-    // treat the whole array as changed at the top level
-    if (JSON.stringify(oldObj) !== JSON.stringify(newObj)) {
-      diffs.push({ path: basePath, oldValue: oldObj, newValue: newObj });
-    }
-    return diffs;
-  }
-
-  // Handle objects
-  if (typeof oldObj === "object" && typeof newObj === "object") {
-    const oldKeys = Object.keys(oldObj as object);
-    const newKeys = Object.keys(newObj as object);
-    const allKeys = new Set([...oldKeys, ...newKeys]);
-
-    for (const key of allKeys) {
-      const oldVal = (oldObj as Record<string, unknown>)[key];
-      const newVal = (newObj as Record<string, unknown>)[key];
-      const newPath = basePath ? `${basePath}.${key}` : key;
-
-      // For top-level fields, compare the whole value
-      if (!basePath) {
-        if (JSON.stringify(oldVal) !== JSON.stringify(newVal)) {
-          diffs.push({ path: newPath, oldValue: oldVal, newValue: newVal });
-        }
-      } else {
-        // For nested fields, recurse
-        diffs.push(...generateDiffs(oldVal, newVal, newPath));
-      }
-    }
-    return diffs;
-  }
-
-  // Handle primitives
-  if (oldObj !== newObj) {
-    diffs.push({ path: basePath, oldValue: oldObj, newValue: newObj });
-  }
-
-  return diffs;
-}
-
 export function JsonEditorDialog({ open, onClose }: JsonEditorDialogProps) {
   const {
     versionInfo,
-    getModifiedMetadata,
-    addPendingChange,
-    clearPendingChanges,
+    modifiedMetadata,
+    setModifiedMetadata
   } = useMetadataContext();
 
   const [jsonText, setJsonText] = useState("");
-  const [parseError, setParseError] = useState<string | null>(null);
-  const [validationErrors, setValidationErrors] = useState<string | null>(null);
-  const [isValidating, setIsValidating] = useState(false);
-  const [changeCount, setChangeCount] = useState(0);
   const [readOnlyFields, setReadOnlyFields] = useState<Set<string>>(new Set());
 
   // Initialize JSON text when dialog opens (filter out readOnly fields)
   useEffect(() => {
     if (open && versionInfo) {
-      const currentMetadata = getModifiedMetadata();
+      const currentMetadata = modifiedMetadata;
       if (currentMetadata) {
         // Get readOnly fields from schema
         const schema = getCachedSchema();
@@ -146,99 +69,67 @@ export function JsonEditorDialog({ open, onClose }: JsonEditorDialogProps) {
         );
 
         setJsonText(JSON.stringify(editableMetadata, null, 2));
-        setParseError(null);
-        setValidationErrors(null);
-        setChangeCount(0);
       }
     }
-  }, [open, versionInfo, getModifiedMetadata]);
+  }, [open, versionInfo, modifiedMetadata]);
 
-  // Validate JSON as user types
+  // Compute parse error and parsed JSON from jsonText
+  const { parseError, parsedJson } = useMemo(() => {
+    if (!jsonText) {
+      return { parseError: null, parsedJson: null };
+    }
+    try {
+      const parsed = JSON.parse(jsonText);
+      return { parseError: null, parsedJson: parsed as Record<string, unknown> };
+    } catch (err) {
+      return {
+        parseError: err instanceof Error ? err.message : "Invalid JSON syntax",
+        parsedJson: null
+      };
+    }
+  }, [jsonText]);
+
+  // Compute validation errors from parsed JSON
+  const validationErrors = useMemo(() => {
+    if (parseError || !parsedJson || !modifiedMetadata) {
+      return null;
+    }
+    // Combine with existing metadata for full validation
+    const fullMetadata = { ...modifiedMetadata, ...parsedJson };
+    const validation = validateFullMetadata(fullMetadata);
+    if (!validation.valid) {
+      return formatValidationErrors(validation.errors);
+    }
+    return null;
+  }, [parseError, parsedJson, modifiedMetadata]);
+
+  // Handle text change (just update state, validation happens via useMemo)
   const handleJsonChange = useCallback(
-    async (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-      const text = e.target.value;
-      setJsonText(text);
-
-      // Try to parse
-      try {
-        const parsed = JSON.parse(text);
-        setParseError(null);
-
-        // Count changes against filtered original (sync operation)
-        const original = versionInfo?.metadata;
-        if (original) {
-          const filteredOriginal = filterEditableFields(
-            original as unknown as Record<string, unknown>,
-            readOnlyFields
-          );
-          const diffs = generateDiffs(filteredOriginal, parsed);
-          setChangeCount(diffs.length);
-        }
-
-        // Validate against schema (async to ensure schema is loaded)
-        // Add back readOnly fields from original for validation
-        setIsValidating(true);
-        try {
-          const fullMetadata = original
-            ? { ...original, ...parsed }
-            : parsed;
-          const validation = await validateFullMetadataAsync(fullMetadata);
-          if (!validation.valid) {
-            setValidationErrors(formatValidationErrors(validation.errors));
-          } else {
-            setValidationErrors(null);
-          }
-        } finally {
-          setIsValidating(false);
-        }
-      } catch (err) {
-        setParseError(
-          err instanceof Error ? err.message : "Invalid JSON syntax"
-        );
-        setValidationErrors(null);
-        setChangeCount(0);
-      }
+    (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+      setJsonText(e.target.value);
     },
-    [versionInfo, readOnlyFields]
+    []
   );
 
   // Apply changes
   const handleApply = useCallback(() => {
-    if (parseError || !versionInfo) return;
+    if (parseError || !versionInfo || !parsedJson) return;
 
-    try {
-      const newMetadata = JSON.parse(jsonText);
-      const original = versionInfo.metadata as unknown as Record<string, unknown>;
-
-      // Filter original to only editable fields for comparison
-      const filteredOriginal = filterEditableFields(original, readOnlyFields);
-
-      // Clear existing pending changes and apply new ones
-      clearPendingChanges();
-
-      // Generate diffs and add as pending changes (only for editable fields)
-      const diffs = generateDiffs(filteredOriginal, newMetadata);
-      for (const diff of diffs) {
-        addPendingChange(diff.path, diff.oldValue, diff.newValue);
-      }
-
-      onClose();
-    } catch (err) {
-      setParseError(
-        err instanceof Error ? err.message : "Failed to apply changes"
-      );
-    }
+    const mergedMetadata = {
+      ...(versionInfo.metadata as unknown as Record<string, unknown>),
+      ...parsedJson,
+    } as unknown as typeof versionInfo.metadata;
+    setModifiedMetadata(mergedMetadata);
+    onClose();
   }, [
-    jsonText,
     parseError,
+    parsedJson,
     versionInfo,
-    readOnlyFields,
-    clearPendingChanges,
-    addPendingChange,
-    onClose,
+    setModifiedMetadata,
+    onClose
   ]);
 
-  // Reset to original (filtered)
+  // Reset to starting (filtered)
   const handleReset = useCallback(() => {
     if (versionInfo?.metadata) {
       const editableMetadata = filterEditableFields(
@@ -246,13 +137,10 @@ export function JsonEditorDialog({ open, onClose }: JsonEditorDialogProps) {
         readOnlyFields
       );
       setJsonText(JSON.stringify(editableMetadata, null, 2));
-      setParseError(null);
-      setValidationErrors(null);
-      setChangeCount(0);
     }
   }, [versionInfo, readOnlyFields]);
 
-  const canApply = !parseError && !validationErrors && !isValidating && changeCount > 0;
+  const canApply = !parseError && !validationErrors;
 
   return (
     <Dialog
@@ -301,14 +189,9 @@ export function JsonEditorDialog({ open, onClose }: JsonEditorDialogProps) {
             <Alert severity="error" sx={{ py: 0, flex: 1 }}>
               Schema validation failed: {validationErrors}
             </Alert>
-          ) : isValidating ? (
-            <Alert severity="info" sx={{ py: 0, flex: 1 }}>
-              Validating...
-            </Alert>
           ) : (
             <Alert severity="success" sx={{ py: 0, flex: 1 }}>
               Valid JSON
-              {changeCount > 0 && ` - ${changeCount} field(s) modified`}
             </Alert>
           )}
         </Box>
@@ -347,7 +230,7 @@ export function JsonEditorDialog({ open, onClose }: JsonEditorDialogProps) {
           disabled={!canApply}
           color="primary"
         >
-          Apply Changes {changeCount > 0 && `(${changeCount})`}
+          Apply Changes
         </Button>
       </DialogActions>
     </Dialog>

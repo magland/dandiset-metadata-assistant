@@ -29,15 +29,12 @@ import SuggestedPrompts from "./SuggestedPrompts";
 export function ChatPanel() {
   const {
     versionInfo,
+    originalMetadata,
+    modifiedMetadata,
     dandisetId,
     version,
-    addPendingChange,
-    pendingChanges,
+    modifyMetadata,
   } = useMetadataContext();
-
-  const getMetadata = useCallback(() => {
-    return versionInfo?.metadata || null;
-  }, [versionInfo]);
 
   const {
     chat,
@@ -52,8 +49,9 @@ export function ChatPanel() {
     currentSuggestions,
     loadingInitialSuggestions,
   } = useChat({
-    getMetadata,
-    addPendingChange,
+    originalMetadata,
+    modifiedMetadata,
+    modifyMetadata,
     dandisetId,
     version,
   });
@@ -287,11 +285,14 @@ export function ChatPanel() {
               <li>Fix formatting or compliance issues</li>
               <li>Suggest better descriptions</li>
             </Box>
-            {pendingChanges.length > 0 && (
-              <Alert severity="info" sx={{ mt: 2, textAlign: "left" }}>
-                You have {pendingChanges.length} pending change
-                {pendingChanges.length > 1 ? "s" : ""} to review.
-              </Alert>
+            {JSON.stringify(originalMetadata) !== JSON.stringify(modifiedMetadata) && (
+              <Typography
+                variant="body2"
+                color="text.secondary"
+                sx={{ mt: 2, fontStyle: "italic" }}
+              >
+                You have pending metadata changes that have not been committed yet.
+              </Typography>
             )}
           </Paper>
         ) : (
