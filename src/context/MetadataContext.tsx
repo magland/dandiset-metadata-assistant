@@ -68,13 +68,6 @@ export function MetadataProvider({ children }: { children: ReactNode }) {
     setModifiedMetadata(modifiedMetadataRef.current);
   }, [metadataRefreshCode]);
 
-  // if originalMetadata changes, reset modifiedMetadata and ref
-  useEffect(() => {
-    modifiedMetadataRef.current = originalMetadata;
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setMetadataRefreshCode(prev => prev + 1);
-  }, [originalMetadata]);
-
   const setApiKey = useCallback((key: string | null) => {
     if (key) {
       localStorage.setItem('dandi-api-key', key);
@@ -85,7 +78,7 @@ export function MetadataProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const modifyMetadata = useCallback((operation: MetadataOperationType, path: string, value?: unknown): ModifyMetadataResult => {
-    const currentMetadata = modifiedMetadataRef.current;
+    const currentMetadata = modifiedMetadataRef.current || originalMetadata;
 
     if (currentMetadata === null) {
       return { success: false, error: 'No metadata loaded' };
@@ -118,7 +111,7 @@ export function MetadataProvider({ children }: { children: ReactNode }) {
     setMetadataRefreshCode((code) => code + 1);
     
     return { success: true };
-  }, []);
+  }, [originalMetadata]);
 
   const clearModifications = useCallback(() => {
     modifiedMetadataRef.current = originalMetadata;
@@ -126,9 +119,9 @@ export function MetadataProvider({ children }: { children: ReactNode }) {
   }, [originalMetadata]);
 
   const revertField = useCallback((fieldKey: string) => {
-    const currentMetadata = modifiedMetadataRef.current;
+    const currentMetadata = modifiedMetadataRef.current || originalMetadata;
     if (!originalMetadata || !currentMetadata) return;
-    
+
     const originalValue = getValueAtPath(originalMetadata, fieldKey);
     const result = applyOperation(currentMetadata, 'set', fieldKey, originalValue);
     
@@ -164,7 +157,7 @@ export function MetadataProvider({ children }: { children: ReactNode }) {
     apiKey,
     setApiKey,
     originalMetadata,
-    modifiedMetadata,
+    modifiedMetadata : modifiedMetadata || originalMetadata,
     setOriginalMetadata: setOriginalMetadata1,
     setModifiedMetadata: setModifiedMetadata1,
     clearModifications

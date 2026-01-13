@@ -1,6 +1,7 @@
 import DescriptionIcon from '@mui/icons-material/Description';
 import EditIcon from '@mui/icons-material/Edit';
-import { Box, CircularProgress, IconButton, Tooltip, Typography } from '@mui/material';
+import EditNoteIcon from '@mui/icons-material/EditNote';
+import { Box, Button, CircularProgress, IconButton, Tooltip, Typography } from '@mui/material';
 import { useState } from 'react';
 import { useMetadataContext } from '../../context/MetadataContext';
 import { CommitButton } from '../Controls/CommitButton';
@@ -9,7 +10,12 @@ import { JsonEditorDialog } from './JsonEditorDialog';
 import { ChangesSummary } from './ChangesSummary';
 import { EditableMetadataView } from './EditableMetadataView';
 
-export function MetadataPanel() {
+interface MetadataPanelProps {
+  isReviewMode?: boolean;
+  onExitReviewMode?: () => void;
+}
+
+export function MetadataPanel({ isReviewMode = false, onExitReviewMode }: MetadataPanelProps) {
   const { versionInfo, isLoading, originalMetadata, modifiedMetadata } = useMetadataContext();
   const [editorOpen, setEditorOpen] = useState(false);
 
@@ -41,7 +47,17 @@ export function MetadataPanel() {
           Metadata
         </Typography>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          {versionInfo && (
+          {isReviewMode && onExitReviewMode && (
+            <Button
+              variant="outlined"
+              size="small"
+              startIcon={<EditNoteIcon />}
+              onClick={onExitReviewMode}
+            >
+              Edit
+            </Button>
+          )}
+          {!isReviewMode && versionInfo && (
             <Tooltip title="Edit JSON directly">
               <IconButton
                 onClick={() => setEditorOpen(true)}
@@ -52,7 +68,7 @@ export function MetadataPanel() {
               </IconButton>
             </Tooltip>
           )}
-          <CommitButton />
+          <CommitButton isReviewMode={isReviewMode} />
         </Box>
       </Box>
 
