@@ -181,11 +181,9 @@ Your role is to help users understand and improve their dandiset metadata by:
 
 **SUGGESTED PROMPTS:**
 - You can include suggested follow-up prompts for the user in any of your responses
-- Use a special code block with the language tag "suggestions" containing a JSON array of 3 short prompts
-- Example:
-\`\`\`suggestions
-["Suggest keywords", "Review contributors", "Improve description"]
-\`\`\`
+- Add a single line starting with "suggestions:" followed by comma-separated prompts
+- Example: suggestions: Suggest keywords, Review contributors, Improve description
+- If a suggestion contains a comma, wrap it in double quotes: suggestions: First suggestion, "Second, with comma", Third suggestion
 - Suggestions must be very short (3-8 words max) - they appear as clickable chips
 - Suggestions must be phrased as USER messages (they get submitted as if the user typed them)
 - Make suggestions relevant to the current context and conversation

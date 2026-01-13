@@ -1,6 +1,7 @@
-import { useEffect, useCallback } from 'react';
+import { useEffect, useCallback, useState, useRef } from 'react';
 import { ThemeProvider, createTheme, CssBaseline } from '@mui/material';
-import { Box, AppBar, Toolbar, Typography } from '@mui/material';
+import { Box, AppBar, Toolbar, Typography, IconButton, Alert, Snackbar } from '@mui/material';
+import InfoIcon from '@mui/icons-material/Info';
 import { MetadataProvider, useMetadataContext } from './context/MetadataContext';
 import logoIcon from '/logo-white.svg';
 import { MainLayout } from './components/Layout/MainLayout';
@@ -9,7 +10,14 @@ import { MetadataPanel } from './components/Metadata/MetadataPanel';
 import { WelcomePage } from './components/Welcome/WelcomePage';
 import { DandisetIndicator } from './components/Controls/DandisetIndicator';
 import { ApiKeyManager } from './components/Controls/ApiKeyManager';
+import AboutDialog from './components/About/AboutDialog';
 import { fetchDandisetVersionInfo } from './utils/api';
+import {
+  parseProposalFromUrl,
+  validateAndApplyProposal,
+  clearProposalFromUrl,
+  type ProposalData
+} from './core/proposalLink';
 
 // Create a custom theme with better colors for diffs
 const theme = createTheme({
@@ -49,11 +57,12 @@ const theme = createTheme({
   },
 });
 
-// Parse URL for dandiset ID
-function getUrlParams(): { dandisetId: string | null } {
+// Parse URL for dandiset ID and review mode
+function getUrlParams(): { dandisetId: string | null; isReviewMode: boolean } {
   const params = new URLSearchParams(window.location.search);
   return {
     dandisetId: params.get('dandiset'),
+    isReviewMode: params.get('review') === '1',
   };
 }
 
@@ -70,6 +79,17 @@ function updateUrl(dandisetId: string | null) {
   window.history.replaceState({}, '', url.toString());
 }
 
+// Update URL review param without page reload
+function updateReviewParam(isReviewMode: boolean) {
+  const url = new URL(window.location.href);
+  if (isReviewMode) {
+    url.searchParams.set('review', '1');
+  } else {
+    url.searchParams.delete('review');
+  }
+  window.history.replaceState({}, '', url.toString());
+}
+
 function AppContent() {
   const {
     versionInfo,
@@ -81,8 +101,22 @@ function AppContent() {
     setError,
     clearModifications,
     apiKey,
-    setOriginalMetadata
+    setOriginalMetadata,
+    setModifiedMetadata
   } = useMetadataContext();
+
+  const [aboutDialogOpen, setAboutDialogOpen] = useState(false);
+  const [proposalError, setProposalError] = useState<string | null>(null);
+  const [isReviewMode, setIsReviewMode] = useState(() => getUrlParams().isReviewMode);
+  
+  // Track if we have a pending proposal to apply after metadata loads
+  const pendingProposalRef = useRef<ProposalData | null>(null);
+
+  // Handler to exit review mode
+  const handleExitReviewMode = useCallback(() => {
+    setIsReviewMode(false);
+    updateReviewParam(false);
+  }, []);
 
   useEffect(() => {
     if (versionInfo && versionInfo.metadata) {
@@ -90,23 +124,84 @@ function AppContent() {
     }
   }, [versionInfo, setOriginalMetadata]);
 
+  // Apply pending proposal after version info and original metadata are set
+  useEffect(() => {
+    const applyPendingProposal = async () => {
+      console.log('[Proposal] Checking for pending proposal...', {
+        hasVersionInfo: !!versionInfo,
+        hasMetadata: !!versionInfo?.metadata,
+        hasPendingProposal: !!pendingProposalRef.current
+      });
+      
+      if (!versionInfo?.metadata || !pendingProposalRef.current) {
+        return;
+      }
+      
+      const proposal = pendingProposalRef.current;
+      pendingProposalRef.current = null; // Clear it so we don't re-apply
+      
+      console.log('[Proposal] Applying proposal...', {
+        proposalHash: proposal.h,
+        proposalDelta: proposal.d
+      });
+      
+      const result = await validateAndApplyProposal(proposal, versionInfo.metadata);
+      
+      console.log('[Proposal] Validation result:', result);
+      
+      if (result.success) {
+        // Apply the modified metadata
+        console.log('[Proposal] Setting modified metadata:', result.modifiedMetadata);
+        setModifiedMetadata(result.modifiedMetadata);
+        // Clear proposal from URL
+        clearProposalFromUrl();
+      } else {
+        console.error('[Proposal] Validation failed:', result.error);
+        setProposalError(result.error);
+        // Clear proposal from URL even on error
+        clearProposalFromUrl();
+      }
+    };
+    
+    applyPendingProposal();
+  }, [versionInfo, setModifiedMetadata]);
+
   // Load dandiset from URL on initial render
   useEffect(() => {
     const { dandisetId: urlDandisetId } = getUrlParams();
+    const proposal = parseProposalFromUrl();
+    
+    console.log('[Proposal] Initial URL parsing:', {
+      urlDandisetId,
+      hasProposal: !!proposal,
+      proposal: proposal ? { hash: proposal.h, delta: proposal.d } : null
+    });
+    
     if (urlDandisetId && !versionInfo) {
+      // Store proposal to apply after loading
+      if (proposal) {
+        console.log('[Proposal] Storing proposal for later application');
+        pendingProposalRef.current = proposal;
+      }
+      
       // Auto-load the dandiset from URL parameters (always use draft)
       const loadFromUrl = async () => {
+        // Set dandiset ID immediately so main layout shows with loading spinner
+        setDandisetId(urlDandisetId);
         setIsLoading(true);
         setError(null);
         try {
           const info = await fetchDandisetVersionInfo(urlDandisetId, 'draft', apiKey);
           setVersionInfo(info);
-          setDandisetId(urlDandisetId);
           setVersion('draft');
         } catch (err) {
           setError(err instanceof Error ? err.message : 'Failed to load dandiset from URL');
-          // Clear invalid URL params
+          // Clear dandiset ID and URL params on error
+          setDandisetId('');
           updateUrl(null);
+          // Clear pending proposal on error
+          pendingProposalRef.current = null;
+          clearProposalFromUrl();
         } finally {
           setIsLoading(false);
         }
@@ -141,6 +236,14 @@ function AppContent() {
             <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
               Dandiset Metadata Assistant
             </Typography>
+            <IconButton
+              color="inherit"
+              onClick={() => setAboutDialogOpen(true)}
+              size="small"
+              sx={{ mr: 1 }}
+            >
+              <InfoIcon />
+            </IconButton>
             <ApiKeyManager />
           </Toolbar>
         </AppBar>
@@ -149,6 +252,12 @@ function AppContent() {
         <Box sx={{ flex: 1, overflow: 'hidden' }}>
           <WelcomePage onDandisetLoaded={handleDandisetLoaded} />
         </Box>
+
+        {/* About Dialog */}
+        <AboutDialog
+          open={aboutDialogOpen}
+          onClose={() => setAboutDialogOpen(false)}
+        />
       </Box>
     );
   }
@@ -176,20 +285,55 @@ function AppContent() {
           <Box sx={{ flexGrow: 1 }}>
             <DandisetIndicator onChangeDandiset={handleChangeDandiset} />
           </Box>
+          <IconButton
+            color="inherit"
+            onClick={() => setAboutDialogOpen(true)}
+            size="small"
+            sx={{ mr: 1 }}
+          >
+            <InfoIcon />
+          </IconButton>
           <ApiKeyManager />
         </Toolbar>
       </AppBar>
 
       {/* Main Content */}
       <Box sx={{ flex: 1, overflow: 'hidden' }}>
-        <MainLayout
-          leftPanel={<ChatPanel />}
-          rightPanel={<MetadataPanel />}
-          initialLeftWidth={50}
-          minLeftWidth={25}
-          maxLeftWidth={75}
-        />
+        {isReviewMode ? (
+          <MetadataPanel isReviewMode={true} onExitReviewMode={handleExitReviewMode} />
+        ) : (
+          <MainLayout
+            leftPanel={<ChatPanel />}
+            rightPanel={<MetadataPanel />}
+            initialLeftWidth={50}
+            minLeftWidth={25}
+            maxLeftWidth={75}
+          />
+        )}
       </Box>
+
+      {/* About Dialog */}
+      <AboutDialog
+        open={aboutDialogOpen}
+        onClose={() => setAboutDialogOpen(false)}
+      />
+
+      {/* Proposal Error Snackbar */}
+      <Snackbar
+        open={!!proposalError}
+        autoHideDuration={15000}
+        onClose={() => setProposalError(null)}
+        anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
+      >
+        <Alert
+          onClose={() => setProposalError(null)}
+          severity="error"
+          variant="filled"
+          sx={{ width: '100%' }}
+        >
+          {proposalError}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 }
