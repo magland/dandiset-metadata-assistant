@@ -1,15 +1,14 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { createContext, useCallback, useContext, useEffect, useState, useRef, type ReactNode } from 'react';
-import { preloadSchema } from '../schemas/schemaService';
-import type { DandisetMetadata, DandisetVersionInfo } from '../types/dandiset';
+import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
+import type { ModifyMetadataResult } from '../chat/types';
 import {
   applyOperation,
-  type MetadataOperationType,
+  getValueAtPath,
   normalizePath,
-  getValueAtPath
+  type MetadataOperationType
 } from '../core/metadataOperations';
-import { validateFullMetadata, formatValidationErrors } from '../schemas/validateMetadata';
-import type { ModifyMetadataResult } from '../chat/types';
+import { formatValidationErrors, validateFullMetadata } from '../schemas/validateMetadata';
+import type { DandisetMetadata, DandisetVersionInfo } from '../types/dandiset';
 
 interface MetadataContextType {
   // Current dandiset info
@@ -84,15 +83,6 @@ export function MetadataProvider({ children }: { children: ReactNode }) {
     }
     setApiKeyState(key);
   }, []);
-
-  // Preload JSON schema (always use latest version for validation)
-  useEffect(() => {
-    if (versionInfo) {
-      preloadSchema().catch((err) => {
-        console.warn('Failed to preload schema:', err);
-      });
-    }
-  }, [versionInfo]);
 
   const modifyMetadata = useCallback((operation: MetadataOperationType, path: string, value?: unknown): ModifyMetadataResult => {
     const currentMetadata = modifiedMetadataRef.current;
