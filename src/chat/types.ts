@@ -80,8 +80,13 @@ export type CompletionRequest = {
 
 export type MetadataOperationType = 'set' | 'delete' | 'insert' | 'append';
 
+export interface ModifyMetadataResult {
+  success: boolean;
+  error?: string;
+}
+
 export interface ToolExecutionContext {
-  modifyMetadata: (operation: MetadataOperationType, path: string, value?: unknown) => boolean;
+  modifyMetadata: (operation: MetadataOperationType, path: string, value?: unknown) => ModifyMetadataResult;
   originalMetadata: any;
   modifiedMetadata: any;
 }

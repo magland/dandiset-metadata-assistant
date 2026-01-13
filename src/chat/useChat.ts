@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { useCallback, useState, useMemo, useRef, useEffect } from "react";
 import processCompletion from "./processCompletion";
-import { Chat, ChatMessage, QPTool, ToolExecutionContext } from "./types";
+import { Chat, ChatMessage, QPTool, ToolExecutionContext, ModifyMetadataResult } from "./types";
 import { DEFAULT_MODEL } from "./availableModels";
 import { proposeMetadataChangeTool } from "./tools/proposeMetadataChange";
 import { fetchUrlTool } from "./tools/fetchUrl";
@@ -82,7 +82,7 @@ const chatReducer = (state: Chat, action: ChatAction): Chat => {
 interface UseChatOptions {
   originalMetadata?: any;
   modifiedMetadata?: any;
-  modifyMetadata: (operation: 'set' | 'delete' | 'insert' | 'append', path: string, value?: unknown) => boolean;
+  modifyMetadata: (operation: 'set' | 'delete' | 'insert' | 'append', path: string, value?: unknown) => ModifyMetadataResult;
   dandisetId: string;
   version: string;
 }
@@ -277,6 +277,7 @@ Available tools:
           toolExecutionContext,
           abortController.signal,
         );
+        console.info("New messages from completion:", newMessages);
 
         let updatedChat = currentChat;
         for (const newMessage of newMessages) {
@@ -301,8 +302,9 @@ Available tools:
           setResponding(false);
           return;
         }
+        console.error("Error generating response:", err);
         setError(
-          err instanceof Error ? err.message : "Error generating response"
+          err instanceof Error ? `Error generating response: ${err.message}` : "Error generating response"
         );
         setPartialResponse(null);
         setResponding(false);
@@ -325,7 +327,7 @@ Available tools:
         await generateResponse(updatedChat);
       } catch (err) {
         setError(
-          err instanceof Error ? err.message : "Error submitting message"
+          err instanceof Error ? `Error submitting message: ${err.message}` : "Error submitting message"
         );
       }
     },

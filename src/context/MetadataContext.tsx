@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useState, useRef, type ReactNode } from 'react';
 import { preloadSchema } from '../schemas/schemaService';
 import type { DandisetMetadata, DandisetVersionInfo } from '../types/dandiset';
 import {
@@ -8,6 +8,8 @@ import {
   normalizePath,
   getValueAtPath
 } from '../core/metadataOperations';
+import { validateFullMetadata, formatValidationErrors } from '../schemas/validateMetadata';
+import type { ModifyMetadataResult } from '../chat/types';
 
 interface MetadataContextType {
   // Current dandiset info
@@ -39,7 +41,7 @@ interface MetadataContextType {
   clearModifications: () => void;
 
   // Metadata modification functions
-  modifyMetadata: (operation: MetadataOperationType, path: string, value?: unknown) => boolean;
+  modifyMetadata: (operation: MetadataOperationType, path: string, value?: unknown) => ModifyMetadataResult;
   revertField: (fieldKey: string) => void;
 }
 
@@ -50,7 +52,6 @@ export function MetadataProvider({ children }: { children: ReactNode }) {
   const [version, setVersion] = useState<string>('draft');
   const [versionInfo, setVersionInfo] = useState<DandisetVersionInfo | null>(null);
   const [originalMetadata, setOriginalMetadata] = useState<DandisetMetadata | null>(null);
-  const [modifiedMetadata, setModifiedMetadata] = useState<DandisetMetadata | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [apiKey, setApiKeyState] = useState<string | null>(() => {
@@ -58,9 +59,21 @@ export function MetadataProvider({ children }: { children: ReactNode }) {
     return localStorage.getItem('dandi-api-key');
   });
 
-  // if originalMetadata changes, reset modifiedMetadata
+  // Ref to track pending metadata for synchronous validation
+  // This allows multiple sequential modifyMetadata calls to build on each other correctly
+  const modifiedMetadataRef = useRef<DandisetMetadata | null>(null);
+
+  const [modifiedMetadata, setModifiedMetadata] = useState<DandisetMetadata | null>(null);
+  const [metadataRefreshCode, setMetadataRefreshCode] = useState<number>(0);
   useEffect(() => {
-    setModifiedMetadata(originalMetadata);
+    setModifiedMetadata(modifiedMetadataRef.current);
+  }, [metadataRefreshCode]);
+
+  // if originalMetadata changes, reset modifiedMetadata and ref
+  useEffect(() => {
+    modifiedMetadataRef.current = originalMetadata;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setMetadataRefreshCode(prev => prev + 1);
   }, [originalMetadata]);
 
   const setApiKey = useCallback((key: string | null) => {
@@ -81,48 +94,68 @@ export function MetadataProvider({ children }: { children: ReactNode }) {
     }
   }, [versionInfo]);
 
-  const modifyMetadata = useCallback((operation: MetadataOperationType, path: string, value?: unknown): boolean => {
-    const normalizedPath = normalizePath(path);
+  const modifyMetadata = useCallback((operation: MetadataOperationType, path: string, value?: unknown): ModifyMetadataResult => {
+    const currentMetadata = modifiedMetadataRef.current;
+
+    if (currentMetadata === null) {
+      return { success: false, error: 'No metadata loaded' };
+    }
     
-    setModifiedMetadata((modifiedMetadata) => {
-      if (modifiedMetadata === null) {
-        console.error('No modified metadata to apply operation to.');
-        return modifiedMetadata;
+    const normalizedPath = normalizePath(path);
+    const result = applyOperation(currentMetadata, operation, normalizedPath, value);
+    
+    if (!result.success) {
+      return { success: false, error: result.error };
+    }
+    
+    const newMetadata = result.data as DandisetMetadata;
+    
+    // Validate against schema
+    const validationResult = validateFullMetadata(newMetadata);
+    if (!validationResult.valid) {
+      // Skip validation if schema is not loaded (indicated by schema-loading keyword)
+      const isSchemaNotLoaded = validationResult.errors.some(e => e.keyword === 'schema-loading');
+      if (!isSchemaNotLoaded) {
+        return {
+          success: false,
+          error: formatValidationErrors(validationResult.errors).join('\n')
+        };
       }
-      
-      const result = applyOperation(modifiedMetadata, operation, normalizedPath, value);
-      
-      if (!result.success) {
-        console.error('Metadata operation failed:', result.error);
-        return modifiedMetadata;
-      }
-      
-      return result.data as DandisetMetadata;
-    });
-    return true;
+      // Schema not loaded yet, allow the change (validation will happen on commit)
+    }
+    
+    modifiedMetadataRef.current = newMetadata;
+    setMetadataRefreshCode((code) => code + 1);
+    
+    return { success: true };
   }, []);
 
   const clearModifications = useCallback(() => {
-    setModifiedMetadata(originalMetadata);
+    modifiedMetadataRef.current = originalMetadata;
+    setMetadataRefreshCode((code) => code + 1);
   }, [originalMetadata]);
 
   const revertField = useCallback((fieldKey: string) => {
-    if (!originalMetadata || !modifiedMetadata) return;
+    const currentMetadata = modifiedMetadataRef.current;
+    if (!originalMetadata || !currentMetadata) return;
     
     const originalValue = getValueAtPath(originalMetadata, fieldKey);
-    const result = applyOperation(modifiedMetadata, 'set', fieldKey, originalValue);
+    const result = applyOperation(currentMetadata, 'set', fieldKey, originalValue);
     
     if (result.success) {
-      setModifiedMetadata(result.data as DandisetMetadata);
+      const newMetadata = result.data as DandisetMetadata;
+      modifiedMetadataRef.current = newMetadata;
+      setMetadataRefreshCode((code) => code + 1);
     }
-  }, [originalMetadata, modifiedMetadata]);
+  }, [originalMetadata]);
 
   const setOriginalMetadata1 = useCallback((metadata: DandisetMetadata | null) => {
     setOriginalMetadata(metadata);
   }, []);
 
   const setModifiedMetadata1 = useCallback((metadata: DandisetMetadata | null) => {
-    setModifiedMetadata(metadata);
+    modifiedMetadataRef.current = metadata;
+    setMetadataRefreshCode((code) => code + 1);
   }, []);
 
   const value: MetadataContextType = {

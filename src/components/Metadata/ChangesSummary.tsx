@@ -17,8 +17,6 @@ interface ChangesSummaryProps {
 export function ChangesSummary({ original, modified }: ChangesSummaryProps) {
   const delta = useMemo(() => computeDelta(original, modified), [original, modified]);
 
-  console.log('Delta:', delta, original, modified);
-  
   // Convert delta to changes for counting
   const changes = useMemo(() => deltaToChanges(delta), [delta]);
   

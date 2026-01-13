@@ -182,10 +182,30 @@ const processCompletion = async (
         throw new Error("Tool not found: " + functionName);
       }
 
-      const { result, newMessages } = await tool.execute(
-        functionArgsParsed,
-        toolExecutionContext,
-      );
+      console.info(`Executing tool: ${functionName} with args:`, functionArgsParsed);
+      let result: string;
+      let newMessages: ChatMessage[] | undefined;
+      try {
+        const a = await tool.execute(
+          functionArgsParsed,
+          toolExecutionContext,
+        );
+        result = a.result;
+        newMessages = a.newMessages;
+      } catch (err) {
+        console.warn(`Error executing tool "${functionName}":`, err);
+        const errorMessage =
+          err instanceof Error ? err.message : "Unknown error executing tool";
+        const errorContent = `Error executing tool "${functionName}": ${errorMessage}`;
+        ret.push({
+          role: "tool",
+          content: errorContent,
+          tool_call_id: toolCallId,
+        });
+        onPartialResponse([...ret]);
+        continue; // Proceed to next tool call
+      }
+
       for (const m of newMessages || []) {
         ret.push(m);
       }
