@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import {
   Dialog,
   DialogTitle,
@@ -13,14 +13,13 @@ import {
 import CloseIcon from "@mui/icons-material/Close";
 import { useMetadataContext } from "../../context/MetadataContext";
 import {
-  validateFullMetadataAsync,
+  validateFullMetadata,
   formatValidationErrors,
 } from "../../schemas/validateMetadata";
 import {
   getCachedSchema,
   getReadOnlyFields,
 } from "../../schemas/schemaService";
-import { computeDiff } from "../../core/metadataDiff";
 
 interface JsonEditorDialogProps {
   open: boolean;
@@ -51,10 +50,6 @@ export function JsonEditorDialog({ open, onClose }: JsonEditorDialogProps) {
   } = useMetadataContext();
 
   const [jsonText, setJsonText] = useState("");
-  const [parseError, setParseError] = useState<string | null>(null);
-  const [validationErrors, setValidationErrors] = useState<string | null>(null);
-  const [isValidating, setIsValidating] = useState(false);
-  const [changeCount, setChangeCount] = useState(0);
   const [readOnlyFields, setReadOnlyFields] = useState<Set<string>>(new Set());
 
   // Initialize JSON text when dialog opens (filter out readOnly fields)
@@ -74,84 +69,62 @@ export function JsonEditorDialog({ open, onClose }: JsonEditorDialogProps) {
         );
 
         setJsonText(JSON.stringify(editableMetadata, null, 2));
-        setParseError(null);
-        setValidationErrors(null);
-        setChangeCount(0);
       }
     }
   }, [open, versionInfo, modifiedMetadata]);
 
-  // Validate JSON as user types
+  // Compute parse error and parsed JSON from jsonText
+  const { parseError, parsedJson } = useMemo(() => {
+    if (!jsonText) {
+      return { parseError: null, parsedJson: null };
+    }
+    try {
+      const parsed = JSON.parse(jsonText);
+      return { parseError: null, parsedJson: parsed as Record<string, unknown> };
+    } catch (err) {
+      return {
+        parseError: err instanceof Error ? err.message : "Invalid JSON syntax",
+        parsedJson: null
+      };
+    }
+  }, [jsonText]);
+
+  // Compute validation errors from parsed JSON
+  const validationErrors = useMemo(() => {
+    if (parseError || !parsedJson || !modifiedMetadata) {
+      return null;
+    }
+    // Combine with existing metadata for full validation
+    const fullMetadata = { ...modifiedMetadata, ...parsedJson };
+    const validation = validateFullMetadata(fullMetadata);
+    if (!validation.valid) {
+      return formatValidationErrors(validation.errors);
+    }
+    return null;
+  }, [parseError, parsedJson, modifiedMetadata]);
+
+  // Handle text change (just update state, validation happens via useMemo)
   const handleJsonChange = useCallback(
-    async (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-      const text = e.target.value;
-      setJsonText(text);
-
-      // Try to parse
-      try {
-        const parsed = JSON.parse(text);
-        setParseError(null);
-
-        // Count changes against filtered original using shared diff utility
-        // const original = versionInfo?.metadata;
-        const startingMetadata = modifiedMetadata;
-        if (startingMetadata) {
-          const filteredStartingMetadata = filterEditableFields(
-            startingMetadata as unknown as Record<string, unknown>,
-            readOnlyFields
-          );
-          const diffs = computeDiff(filteredStartingMetadata, parsed);
-          setChangeCount(diffs.length);
-        }
-
-        // Validate against schema (async to ensure schema is loaded)
-        // Add back readOnly fields from starting for validation
-        setIsValidating(true);
-        try {
-          const fullMetadata = startingMetadata
-            ? { ...startingMetadata, ...parsed }
-            : parsed;
-          const validation = await validateFullMetadataAsync(fullMetadata);
-          if (!validation.valid) {
-            setValidationErrors(formatValidationErrors(validation.errors));
-          } else {
-            setValidationErrors(null);
-          }
-        } finally {
-          setIsValidating(false);
-        }
-      } catch (err) {
-        setParseError(
-          err instanceof Error ? err.message : "Invalid JSON syntax"
-        );
-        setValidationErrors(null);
-        setChangeCount(0);
-      }
+    (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+      setJsonText(e.target.value);
     },
-    [versionInfo, readOnlyFields]
+    []
   );
 
   // Apply changes
   const handleApply = useCallback(() => {
-    if (parseError || !versionInfo) return;
+    if (parseError || !versionInfo || !parsedJson) return;
 
-    try {
-      const mergedMetadata = {
-        ...(versionInfo.metadata as unknown as Record<string, unknown>),
-        ...JSON.parse(jsonText),
-      }
-      setModifiedMetadata(mergedMetadata);
-
-      onClose();
-    } catch (err) {
-      setParseError(
-        err instanceof Error ? err.message : "Failed to apply changes"
-      );
-    }
+    const mergedMetadata = {
+      ...(versionInfo.metadata as unknown as Record<string, unknown>),
+      ...parsedJson,
+    } as unknown as typeof versionInfo.metadata;
+    setModifiedMetadata(mergedMetadata);
+    onClose();
   }, [
     parseError,
+    parsedJson,
     versionInfo,
-    jsonText,
     setModifiedMetadata,
     onClose
   ]);
@@ -164,13 +137,10 @@ export function JsonEditorDialog({ open, onClose }: JsonEditorDialogProps) {
         readOnlyFields
       );
       setJsonText(JSON.stringify(editableMetadata, null, 2));
-      setParseError(null);
-      setValidationErrors(null);
-      setChangeCount(0);
     }
   }, [versionInfo, readOnlyFields]);
 
-  const canApply = !parseError && !validationErrors && !isValidating && changeCount > 0;
+  const canApply = !parseError && !validationErrors;
 
   return (
     <Dialog
@@ -219,14 +189,9 @@ export function JsonEditorDialog({ open, onClose }: JsonEditorDialogProps) {
             <Alert severity="error" sx={{ py: 0, flex: 1 }}>
               Schema validation failed: {validationErrors}
             </Alert>
-          ) : isValidating ? (
-            <Alert severity="info" sx={{ py: 0, flex: 1 }}>
-              Validating...
-            </Alert>
           ) : (
             <Alert severity="success" sx={{ py: 0, flex: 1 }}>
               Valid JSON
-              {changeCount > 0 && ` - ${changeCount} field(s) modified`}
             </Alert>
           )}
         </Box>
@@ -265,7 +230,7 @@ export function JsonEditorDialog({ open, onClose }: JsonEditorDialogProps) {
           disabled={!canApply}
           color="primary"
         >
-          Apply Changes {changeCount > 0 && `(${changeCount})`}
+          Apply Changes
         </Button>
       </DialogActions>
     </Dialog>
