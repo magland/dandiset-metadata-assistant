@@ -1,6 +1,6 @@
-import CloseIcon from '@mui/icons-material/Close';
 import DescriptionIcon from '@mui/icons-material/Description';
 import EditIcon from '@mui/icons-material/Edit';
+import EditNoteIcon from '@mui/icons-material/EditNote';
 import { Box, Button, CircularProgress, IconButton, Tooltip, Typography } from '@mui/material';
 import { useState } from 'react';
 import { useMetadataContext } from '../../context/MetadataContext';
@@ -51,7 +51,7 @@ export function MetadataPanel({ isReviewMode = false, onExitReviewMode }: Metada
             <Button
               variant="outlined"
               size="small"
-              startIcon={<CloseIcon />}
+              startIcon={<EditNoteIcon />}
               onClick={onExitReviewMode}
             >
               Edit
