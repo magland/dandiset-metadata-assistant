@@ -124,9 +124,17 @@ export const fetchUrlTool: QPTool = {
         (domain) => hostname === domain || hostname.endsWith("." + domain)
       );
 
+      // For OpenAlex works API, automatically add select parameter to reduce response size
+      let finalUrl = url;
+      if (hostname === "api.openalex.org" && parsedUrl.pathname.startsWith("/works") && !parsedUrl.search.includes("select=")) {
+        const separator = parsedUrl.search ? "&" : "?";
+        // Select only fields useful for metadata extraction
+        finalUrl = `${url}${separator}select=id,doi,title,display_name,authorships,publication_year,publication_date,funders,keywords`;
+      }
+
       const fetchUrl = needsProxy
-        ? `https://corsproxy.io/?${encodeURIComponent(url)}`
-        : url;
+        ? `https://corsproxy.io/?${encodeURIComponent(finalUrl)}`
+        : finalUrl;
 
       const response = await fetch(fetchUrl, {
         method: "GET",
@@ -148,9 +156,10 @@ export const fetchUrlTool: QPTool = {
       const contentType = response.headers.get("content-type") || "";
       let content: string;
 
+      let jsonContent: unknown = null;
       if (contentType.includes("application/json")) {
-        const json = await response.json();
-        content = JSON.stringify(json, null, 2);
+        jsonContent = await response.json();
+        content = JSON.stringify(jsonContent, null, 2);
       } else {
         // For HTML/text content, get the raw text
         const html = await response.text();
@@ -159,21 +168,28 @@ export const fetchUrlTool: QPTool = {
       }
 
       // Truncate if too long (to avoid overwhelming the context)
-      const maxLength = 15000;
+      // 25000 chars accommodates most OpenAlex responses with full authorship data
+      const maxLength = 25000;
       const truncated = content.length > maxLength;
       const finalContent = truncated
         ? content.substring(0, maxLength) + "\n\n[Content truncated due to length...]"
         : content;
 
       return {
-        result: JSON.stringify({
-          success: true,
-          url,
-          reason: reason || "Not specified",
-          contentLength: content.length,
-          truncated,
-          content: finalContent,
-        }),
+        result: JSON.stringify(
+          {
+            success: true,
+            url,
+            reason: reason || "Not specified",
+            contentLength: content.length,
+            truncated,
+            // For JSON responses, include the parsed object directly to avoid double-stringification
+            // For HTML/text responses, include the extracted text
+            content: jsonContent && !truncated ? jsonContent : finalContent,
+          },
+          null,
+          2
+        ),
       };
     } catch (error) {
       return {
