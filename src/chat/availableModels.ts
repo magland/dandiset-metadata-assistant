@@ -65,4 +65,4 @@ export const CHEAP_MODELS = [
   "google/gemini-2.5-flash",
 ];
 
-export const DEFAULT_MODEL = "openai/gpt-5-mini";
+export const DEFAULT_MODEL = "openai/gpt-4.1-mini";
