@@ -55,6 +55,14 @@ export const AVAILABLE_MODELS = [
       completion: 15,
     },
   },
+  {
+    model: "moonshotai/kimi-k2-thinking",
+    label: "kimi-k2-thinking",
+    cost: {
+      prompt: 0.47,
+      completion: 2
+    }
+  }
 ];
 
 // Cheap models that can use server API key
@@ -63,6 +71,7 @@ export const CHEAP_MODELS = [
   "openai/gpt-5-mini",
   "openai/gpt-4o-mini",
   "google/gemini-2.5-flash",
+  "moonshotai/kimi-k2-thinking"
 ];
 
 export const DEFAULT_MODEL = "openai/gpt-5-mini";
