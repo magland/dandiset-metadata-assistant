@@ -74,4 +74,4 @@ export const CHEAP_MODELS = [
   "moonshotai/kimi-k2-thinking"
 ];
 
-export const DEFAULT_MODEL = "openai/gpt-5-mini";
+export const DEFAULT_MODEL = "google/gemini-2.5-flash";
