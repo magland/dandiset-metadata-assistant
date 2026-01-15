@@ -67,6 +67,13 @@ export function ChatPanel() {
   const [errorExpanded, setErrorExpanded] = useState<boolean>(false);
   const conversationRef = useRef<HTMLDivElement>(null);
 
+  // Get compression threshold from URL query parameter (for testing)
+  const compressionThreshold = useMemo(() => {
+    const params = new URLSearchParams(window.location.search);
+    const testThreshold = params.get('compressThreshold');
+    return testThreshold ? parseInt(testThreshold, 10) : 35;
+  }, []);
+
   // Check if API key is required but not present
   const requiresApiKey = !CHEAP_MODELS.includes(chat.model);
   const hasApiKey = !!getStoredOpenRouterApiKey();
@@ -461,6 +468,26 @@ export function ChatPanel() {
         >
           This model requires an OpenRouter API key. Click settings to add one
           or switch to a free model.
+        </Alert>
+      )}
+
+      {/* Compression Suggestion Warning */}
+      {chat.messages.length > compressionThreshold && !compressing && (
+        <Alert
+          severity="info"
+          sx={{ mx: 2, mb: 1 }}
+          action={
+            <Button
+              size="small"
+              color="inherit"
+              onClick={handleCompressClick}
+              startIcon={<CompressIcon />}
+            >
+              Compress
+            </Button>
+          }
+        >
+          The conversation is getting long ({chat.messages.length} messages). Consider compressing it to maintain context while reducing token usage.
         </Alert>
       )}
 
