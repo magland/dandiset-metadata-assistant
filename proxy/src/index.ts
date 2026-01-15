@@ -20,6 +20,14 @@ interface CommitRequest {
 }
 
 /**
+ * Request body interface for publish endpoint
+ */
+interface PublishRequest {
+  dandisetId: string;
+  apiKey: string;
+}
+
+/**
  * Handle CORS preflight requests
  */
 function handleCors(request: Request): Response | null {
@@ -195,6 +203,107 @@ async function handleCommit(request: Request): Promise<Response> {
 }
 
 /**
+ * Handle publish dandiset request
+ */
+async function handlePublish(request: Request): Promise<Response> {
+  const origin = request.headers.get('Origin');
+  
+  // Validate origin
+  if (!origin || !ALLOWED_ORIGINS.includes(origin)) {
+    return new Response(
+      JSON.stringify({ error: 'Origin not allowed' }),
+      { status: 403, headers: { 'Content-Type': 'application/json' } }
+    );
+  }
+  
+  const corsHeaders = getCorsHeaders(origin);
+  
+  try {
+    // Parse request body
+    const body: PublishRequest = await request.json();
+    const { dandisetId, apiKey } = body;
+    
+    // Validate required fields
+    if (!dandisetId || !apiKey) {
+      return new Response(
+        JSON.stringify({
+          error: 'Missing required fields: dandisetId, apiKey'
+        }),
+        {
+          status: 400,
+          headers: { 'Content-Type': 'application/json', ...corsHeaders }
+        }
+      );
+    }
+    
+    // Forward to DANDI API publish endpoint
+    const dandiUrl = `${DANDI_API_BASE}/dandisets/${dandisetId}/versions/draft/publish/`;
+    
+    const dandiResponse = await fetch(dandiUrl, {
+      method: 'POST',
+      headers: {
+        'Authorization': `token ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+    });
+    
+    // Get response body
+    const responseText = await dandiResponse.text();
+    let responseData;
+    try {
+      responseData = JSON.parse(responseText);
+    } catch {
+      responseData = { message: responseText };
+    }
+    
+    // Check if DANDI request was successful
+    if (!dandiResponse.ok) {
+      return new Response(
+        JSON.stringify({
+          error: 'DANDI API publish request failed',
+          status: dandiResponse.status,
+          message: responseData.message || responseData.detail || responseText,
+          details: responseData,
+        }),
+        {
+          status: dandiResponse.status,
+          headers: { 'Content-Type': 'application/json', ...corsHeaders }
+        }
+      );
+    }
+    
+    console.log(`Successfully published dandiset ${dandisetId}`);
+    
+    // Return success response
+    return new Response(
+      JSON.stringify({
+        success: true,
+        message: 'Dandiset published successfully',
+        data: responseData,
+      }),
+      {
+        status: 200,
+        headers: { 'Content-Type': 'application/json', ...corsHeaders }
+      }
+    );
+    
+  } catch (error) {
+    console.error('Error handling publish request:', error);
+    
+    return new Response(
+      JSON.stringify({
+        error: 'Internal server error',
+        message: error instanceof Error ? error.message : 'Unknown error',
+      }),
+      {
+        status: 500,
+        headers: { 'Content-Type': 'application/json', ...corsHeaders }
+      }
+    );
+  }
+}
+
+/**
  * Main Worker export
  */
 export default {
@@ -210,6 +319,11 @@ export default {
     // Route to commit endpoint
     if (url.pathname === '/commit' && request.method === 'POST') {
       return handleCommit(request);
+    }
+    
+    // Route to publish endpoint
+    if (url.pathname === '/publish' && request.method === 'POST') {
+      return handlePublish(request);
     }
     
     // Health check endpoint

@@ -5,9 +5,10 @@ import DeleteSweepIcon from '@mui/icons-material/DeleteSweep';
 import LockIcon from '@mui/icons-material/Lock';
 import LinkIcon from '@mui/icons-material/Link';
 import { useMetadataContext } from '../../context/MetadataContext';
-import { commitMetadataChanges, fetchDandisetVersionInfo } from '../../utils/api';
+import { commitMetadataChanges, fetchDandisetVersionInfo, publishDandiset } from '../../utils/api';
 import { createProposalLink } from '../../core/proposalLink';
 import type { DandisetMetadata } from '../../types/dandiset';
+import { CommitConfirmDialog, type CommitAction } from './CommitConfirmDialog';
 
 interface CommitButtonProps {
   isReviewMode?: boolean;
@@ -26,17 +27,30 @@ export function CommitButton({ isReviewMode = false }: CommitButtonProps) {
     clearModifications
   } = useMetadataContext();
 
+  const [showDialog, setShowDialog] = useState(false);
   const [isCommitting, setIsCommitting] = useState(false);
   const [commitError, setCommitError] = useState<string | null>(null);
   const [commitSuccess, setCommitSuccess] = useState(false);
+  const [successMessage, setSuccessMessage] = useState<string>('Metadata committed successfully!');
   const [copySuccess, setCopySuccess] = useState(false);
   const [copyError, setCopyError] = useState<string | null>(null);
 
   const hasChanges = JSON.stringify(originalMetadata) !== JSON.stringify(modifiedMetadata);
   const canCommit = hasChanges && !!apiKey && !!versionInfo;
 
-  const handleCommit = async () => {
+  const handleCommitClick = () => {
+    if (!canCommit) return;
+    setShowDialog(true);
+  };
+
+  const handleDialogClose = async (action: CommitAction) => {
+    if (action === 'cancel') {
+      setShowDialog(false);
+      return;
+    }
+
     if (!apiKey || !versionInfo || !dandisetId || !version) {
+      setShowDialog(false);
       return;
     }
 
@@ -47,9 +61,18 @@ export function CommitButton({ isReviewMode = false }: CommitButtonProps) {
       // Commit the changes via the proxy
       await commitMetadataChanges(dandisetId, version, modifiedMetadata, apiKey);
 
+      // If commit and publish, also publish
+      if (action === 'commit-and-publish') {
+        await publishDandiset(dandisetId, apiKey);
+        setSuccessMessage('Metadata committed and dandiset published successfully!');
+      } else {
+        setSuccessMessage('Metadata committed successfully!');
+      }
+
       // Success! Clear pending changes
       clearModifications();
       setCommitSuccess(true);
+      setShowDialog(false);
 
       // Refresh the version info to get the latest state
       setIsLoading(true);
@@ -66,6 +89,7 @@ export function CommitButton({ isReviewMode = false }: CommitButtonProps) {
     } catch (error) {
       console.error('Commit failed:', error);
       setCommitError(error instanceof Error ? error.message : 'Failed to commit changes');
+      setShowDialog(false);
     } finally {
       setIsCommitting(false);
     }
@@ -172,7 +196,7 @@ export function CommitButton({ isReviewMode = false }: CommitButtonProps) {
               color="success"
               size="small"
               startIcon={isCommitting ? <CircularProgress size={16} color="inherit" /> : (!apiKey ? <LockIcon /> : <SaveIcon />)}
-              onClick={handleCommit}
+              onClick={handleCommitClick}
               disabled={!canCommit || isCommitting}
             >
               {isCommitting ? 'Committing...' : 'Commit Changes'}
@@ -188,13 +212,13 @@ export function CommitButton({ isReviewMode = false }: CommitButtonProps) {
         onClose={() => setCommitSuccess(false)}
         anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
       >
-        <Alert 
-          onClose={() => setCommitSuccess(false)} 
-          severity="success" 
+        <Alert
+          onClose={() => setCommitSuccess(false)}
+          severity="success"
           variant="filled"
           sx={{ width: '100%' }}
         >
-          Metadata committed successfully!
+          {successMessage}
         </Alert>
       </Snackbar>
 
@@ -248,6 +272,13 @@ export function CommitButton({ isReviewMode = false }: CommitButtonProps) {
           {copyError}
         </Alert>
       </Snackbar>
+
+      {/* Commit confirmation dialog */}
+      <CommitConfirmDialog
+        open={showDialog}
+        onClose={handleDialogClose}
+        isProcessing={isCommitting}
+      />
     </>
   );
 }
