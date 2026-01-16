@@ -115,9 +115,75 @@ export function DandisetInfo() {
       {versionInfo.version_validation_errors.length > 0 && (
         <>
           <Divider sx={{ my: 1 }} />
-          <Typography variant="body2" color="error" sx={{ mt: 1 }}>
-            {versionInfo.version_validation_errors.length} validation error(s)
+          <Typography variant="body2" color="error" sx={{ mt: 1, mb: 1, fontWeight: 'bold' }}>
+            Validation Errors ({versionInfo.version_validation_errors.length}):
           </Typography>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+            {versionInfo.version_validation_errors.slice(0, 10).map((error, index) => (
+              <Paper
+                key={index}
+                variant="outlined"
+                sx={{
+                  p: 1.5,
+                  bgcolor: 'error.light',
+                  borderColor: 'error.main',
+                  borderWidth: 1,
+                }}
+              >
+                <Typography variant="caption" fontWeight="bold" color="error.dark">
+                  Field: {error.field}
+                </Typography>
+                <Typography variant="body2" color="text.primary" sx={{ mt: 0.5 }}>
+                  {error.message}
+                </Typography>
+              </Paper>
+            ))}
+            {versionInfo.version_validation_errors.length > 10 && (
+              <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, fontStyle: 'italic' }}>
+                ... and {versionInfo.version_validation_errors.length - 10} more error(s)
+              </Typography>
+            )}
+          </Box>
+        </>
+      )}
+
+      {versionInfo.asset_validation_errors.length > 0 && (
+        <>
+          <Divider sx={{ my: 1 }} />
+          <Typography variant="body2" color="error" sx={{ mt: 1, mb: 1, fontWeight: 'bold' }}>
+            Asset Validation Errors ({versionInfo.asset_validation_errors.length}):
+          </Typography>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+            {versionInfo.asset_validation_errors.slice(0, 10).map((error, index) => (
+              <Paper
+                key={index}
+                variant="outlined"
+                sx={{
+                  p: 1.5,
+                  bgcolor: 'error.light',
+                  borderColor: 'error.main',
+                  borderWidth: 1,
+                }}
+              >
+                <Typography variant="caption" fontWeight="bold" color="error.dark">
+                  Field: {error.field}
+                </Typography>
+                <Typography variant="body2" color="text.primary" sx={{ mt: 0.5 }}>
+                  {error.message}
+                </Typography>
+                {error.path && (
+                  <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
+                    Path: {error.path}
+                  </Typography>
+                )}
+              </Paper>
+            ))}
+            {versionInfo.asset_validation_errors.length > 10 && (
+              <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, fontStyle: 'italic' }}>
+                ... and {versionInfo.asset_validation_errors.length - 10} more error(s)
+              </Typography>
+            )}
+          </Box>
         </>
       )}
     </Paper>
