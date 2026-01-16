@@ -9,6 +9,12 @@ import {
 } from '../core/metadataOperations';
 import { formatValidationErrors, validateFullMetadata } from '../schemas/validateMetadata';
 import type { DandisetMetadata, DandisetVersionInfo } from '../types/dandiset';
+import {
+  getStoredDandiApiKey,
+  setStoredDandiApiKey,
+  clearStoredDandiApiKey,
+  type StorageType
+} from '../utils/dandiApiKeyStorage';
 
 interface MetadataContextType {
   // Current dandiset info
@@ -29,7 +35,7 @@ interface MetadataContextType {
   
   // API Key
   apiKey: string | null;
-  setApiKey: (key: string | null) => void;
+  setApiKey: (key: string | null, storageType?: StorageType) => void;
   
   // Get the current metadata with pending changes applied
   originalMetadata: DandisetMetadata | null;
@@ -54,8 +60,8 @@ export function MetadataProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [apiKey, setApiKeyState] = useState<string | null>(() => {
-    // Initialize from localStorage
-    return localStorage.getItem('dandi-api-key');
+    // Initialize from storage (checks session first, then local)
+    return getStoredDandiApiKey();
   });
 
   // Ref to track pending metadata for synchronous validation
@@ -68,11 +74,11 @@ export function MetadataProvider({ children }: { children: ReactNode }) {
     setModifiedMetadata(modifiedMetadataRef.current);
   }, [metadataRefreshCode]);
 
-  const setApiKey = useCallback((key: string | null) => {
+  const setApiKey = useCallback((key: string | null, storageType: StorageType = 'session') => {
     if (key) {
-      localStorage.setItem('dandi-api-key', key);
+      setStoredDandiApiKey(key, storageType);
     } else {
-      localStorage.removeItem('dandi-api-key');
+      clearStoredDandiApiKey();
     }
     setApiKeyState(key);
   }, []);

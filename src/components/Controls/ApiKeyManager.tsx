@@ -11,6 +11,8 @@ import {
   Typography,
   Chip,
   Tooltip,
+  Checkbox,
+  FormControlLabel,
 } from '@mui/material';
 import KeyIcon from '@mui/icons-material/Key';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
@@ -18,11 +20,13 @@ import ErrorIcon from '@mui/icons-material/Error';
 import VisibilityIcon from '@mui/icons-material/Visibility';
 import VisibilityOffIcon from '@mui/icons-material/VisibilityOff';
 import { useMetadataContext } from '../../context/MetadataContext';
+import type { StorageType } from '../../utils/dandiApiKeyStorage';
 
 export function ApiKeyManager() {
   const { apiKey, setApiKey } = useMetadataContext();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [localApiKey, setLocalApiKey] = useState('');
+  const [persistKey, setPersistKey] = useState(false);
   const [showKey, setShowKey] = useState(false);
 
   const hasApiKey = !!apiKey;
@@ -39,7 +43,8 @@ export function ApiKeyManager() {
   };
 
   const handleSave = () => {
-    setApiKey(localApiKey.trim() || null);
+    const storageType: StorageType = persistKey ? 'local' : 'session';
+    setApiKey(localApiKey.trim() || null, storageType);
     handleClose();
   };
 
@@ -68,8 +73,7 @@ export function ApiKeyManager() {
         </DialogTitle>
         <DialogContent>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            Enter your DANDI API key to enable committing changes. The key will be stored
-            securely in your browser's local storage.
+            Enter your DANDI API key to enable committing changes.
           </Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
             You can get your API key from your{' '}
@@ -82,7 +86,7 @@ export function ApiKeyManager() {
             </a>
             .
           </Typography>
-          <Box sx={{ display: 'flex', gap: 1 }}>
+          <Box sx={{ display: 'flex', gap: 1, mb: 2 }}>
             <TextField
               fullWidth
               label="API Key"
@@ -96,6 +100,23 @@ export function ApiKeyManager() {
               {showKey ? <VisibilityOffIcon /> : <VisibilityIcon />}
             </IconButton>
           </Box>
+          <FormControlLabel
+            control={
+              <Checkbox
+                checked={persistKey}
+                onChange={(e) => setPersistKey(e.target.checked)}
+              />
+            }
+            label={
+              <Box sx={{ ml: 0 }}>
+                <Typography variant="body2">Persist API key in browser</Typography>
+                <Typography variant="caption" color="text.secondary">
+                  If unchecked, key will be cleared when browser closes
+                </Typography>
+              </Box>
+            }
+            sx={{ ml: 0, alignItems: 'flex-start' }}
+          />
         </DialogContent>
         <DialogActions>
           {hasApiKey && (

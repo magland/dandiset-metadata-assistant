@@ -15,6 +15,8 @@ import {
   IconButton,
   InputAdornment,
   Divider,
+  Checkbox,
+  FormControlLabel,
 } from '@mui/material';
 import SearchIcon from '@mui/icons-material/Search';
 import ScienceIcon from '@mui/icons-material/Science';
@@ -30,6 +32,7 @@ import {
   type OwnedDandiset,
   type DandisetSortOrder,
 } from '../../utils/api';
+import type { StorageType } from '../../utils/dandiApiKeyStorage';
 
 interface WelcomePageProps {
   onDandisetLoaded: (dandisetId: string) => void;
@@ -52,6 +55,7 @@ export function WelcomePage({ onDandisetLoaded }: WelcomePageProps) {
   const [localDandisetId, setLocalDandisetId] = useState('');
   const [localApiKey, setLocalApiKey] = useState('');
   const [showApiKey, setShowApiKey] = useState(false);
+  const [persistKey, setPersistKey] = useState(false);
   const [ownedDandisets, setOwnedDandisets] = useState<OwnedDandiset[]>([]);
   const [sortOrder, setSortOrder] = useState<DandisetSortOrder>('-modified');
   const [isLoadingDandisets, setIsLoadingDandisets] = useState(false);
@@ -77,7 +81,8 @@ export function WelcomePage({ onDandisetLoaded }: WelcomePageProps) {
 
   const handleSaveApiKey = () => {
     if (localApiKey.trim()) {
-      setApiKey(localApiKey.trim());
+      const storageType: StorageType = persistKey ? 'local' : 'session';
+      setApiKey(localApiKey.trim(), storageType);
       setLocalApiKey('');
     }
   };
@@ -165,7 +170,7 @@ export function WelcomePage({ onDandisetLoaded }: WelcomePageProps) {
           </Box>
 
           {/* API Key Form */}
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, textAlign: 'left' }}>
             <TextField
               label="DANDI API Key"
               type={showApiKey ? 'text' : 'password'}
@@ -184,6 +189,24 @@ export function WelcomePage({ onDandisetLoaded }: WelcomePageProps) {
                   </InputAdornment>
                 ),
               }}
+            />
+
+            <FormControlLabel
+              control={
+                <Checkbox
+                  checked={persistKey}
+                  onChange={(e) => setPersistKey(e.target.checked)}
+                />
+              }
+              label={
+                <Box sx={{ ml: 0 }}>
+                  <Typography variant="body2">Persist API key in browser</Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    If unchecked, key will be cleared when browser closes
+                  </Typography>
+                </Box>
+              }
+              sx={{ ml: 0, alignItems: 'flex-start' }}
             />
 
             <Button
