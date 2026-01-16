@@ -1,11 +1,11 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Box, Button, Typography, Tooltip, Badge, CircularProgress, Alert, Snackbar, IconButton } from '@mui/material';
 import SaveIcon from '@mui/icons-material/Save';
 import DeleteSweepIcon from '@mui/icons-material/DeleteSweep';
 import LockIcon from '@mui/icons-material/Lock';
 import LinkIcon from '@mui/icons-material/Link';
 import { useMetadataContext } from '../../context/MetadataContext';
-import { commitMetadataChanges, fetchDandisetVersionInfo } from '../../utils/api';
+import { commitMetadataChanges, fetchDandisetVersionInfo, checkUserIsOwner } from '../../utils/api';
 import { createProposalLink } from '../../core/proposalLink';
 import type { DandisetMetadata } from '../../types/dandiset';
 
@@ -31,9 +31,30 @@ export function CommitButton({ isReviewMode = false }: CommitButtonProps) {
   const [commitSuccess, setCommitSuccess] = useState(false);
   const [copySuccess, setCopySuccess] = useState(false);
   const [copyError, setCopyError] = useState<string | null>(null);
+  const [isOwner, setIsOwner] = useState<boolean | null>(null);
 
   const hasChanges = JSON.stringify(originalMetadata) !== JSON.stringify(modifiedMetadata);
-  const canCommit = hasChanges && !!apiKey && !!versionInfo;
+  const canCommit = hasChanges && !!apiKey && !!versionInfo && isOwner === true;
+
+  // Check if the user is an owner of the dandiset
+  useEffect(() => {
+    async function checkOwnership() {
+      if (!apiKey || !dandisetId) {
+        setIsOwner(null);
+        return;
+      }
+
+      try {
+        const ownerStatus = await checkUserIsOwner(dandisetId, apiKey);
+        setIsOwner(ownerStatus);
+      } catch (error) {
+        console.error('Failed to check ownership:', error);
+        setIsOwner(false);
+      }
+    }
+
+    checkOwnership();
+  }, [apiKey, dandisetId]);
 
   const handleCommit = async () => {
     if (!apiKey || !versionInfo || !dandisetId || !version) {
@@ -161,6 +182,8 @@ export function CommitButton({ isReviewMode = false }: CommitButtonProps) {
           title={
             !apiKey
               ? 'API key required to commit changes'
+              : isOwner === false
+              ? 'You must be an owner of this dandiset to commit changes'
               : !hasChanges
               ? 'No pending changes to commit'
               : 'Commit all pending changes'

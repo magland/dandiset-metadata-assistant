@@ -110,3 +110,77 @@ export async function commitMetadataChanges(
   const data = await response.json();
   console.log('Metadata committed successfully', data);
 }
+
+export interface DandiUser {
+  username: string;
+  name: string;
+  admin: boolean;
+  status: string;
+}
+
+export interface DandisetOwner {
+  username: string;
+}
+
+export async function fetchCurrentUser(apiKey: string): Promise<DandiUser> {
+  const url = `${DANDI_API_BASE}/users/me/`;
+
+  const response = await fetch(url, {
+    headers: {
+      Authorization: `token ${apiKey}`,
+    },
+  });
+
+  if (!response.ok) {
+    if (response.status === 401) {
+      throw new Error('Invalid API key');
+    }
+    throw new Error(`Failed to fetch current user: ${response.statusText}`);
+  }
+
+  const data = await response.json();
+  return data as DandiUser;
+}
+
+export async function fetchDandisetOwners(
+  dandisetId: string,
+  apiKey: string
+): Promise<DandisetOwner[]> {
+  const url = `${DANDI_API_BASE}/dandisets/${dandisetId}/users/`;
+
+  const response = await fetch(url, {
+    headers: {
+      Authorization: `token ${apiKey}`,
+    },
+  });
+
+  if (!response.ok) {
+    if (response.status === 401) {
+      throw new Error('Invalid API key');
+    }
+    if (response.status === 404) {
+      throw new Error(`Dandiset ${dandisetId} not found`);
+    }
+    throw new Error(`Failed to fetch dandiset owners: ${response.statusText}`);
+  }
+
+  const data = await response.json();
+  return data as DandisetOwner[];
+}
+
+export async function checkUserIsOwner(
+  dandisetId: string,
+  apiKey: string
+): Promise<boolean> {
+  try {
+    const [currentUser, owners] = await Promise.all([
+      fetchCurrentUser(apiKey),
+      fetchDandisetOwners(dandisetId, apiKey),
+    ]);
+
+    return owners.some((owner) => owner.username === currentUser.username);
+  } catch (error) {
+    console.error('Failed to check ownership:', error);
+    return false;
+  }
+}
