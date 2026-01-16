@@ -140,6 +140,8 @@ export function MetadataProvider({ children }: { children: ReactNode }) {
 
   const setOriginalMetadata1 = useCallback((metadata: DandisetMetadata | null) => {
     setOriginalMetadata(metadata);
+    modifiedMetadataRef.current = null; // Reset modifications when loading new metadata
+    setMetadataRefreshCode((code) => code + 1);
   }, []);
 
   const setModifiedMetadata1 = useCallback((metadata: DandisetMetadata | null) => {
