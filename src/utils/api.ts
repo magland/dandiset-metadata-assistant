@@ -110,3 +110,38 @@ export async function commitMetadataChanges(
   const data = await response.json();
   console.log('Metadata committed successfully', data);
 }
+
+export async function publishDandiset(
+  dandisetId: string,
+  apiKey: string
+): Promise<void> {
+  const url = `${PROXY_URL}/publish`;
+
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      dandisetId,
+      apiKey,
+    }),
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    
+    if (response.status === 401 || response.status === 403) {
+      throw new Error('Authentication failed. Please check your API key.');
+    }
+    
+    throw new Error(
+      errorData.message ||
+      errorData.error ||
+      `Failed to publish dandiset: ${response.statusText}`
+    );
+  }
+
+  const data = await response.json();
+  console.log('Dandiset published successfully', data);
+}
