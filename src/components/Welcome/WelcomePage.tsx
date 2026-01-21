@@ -191,8 +191,8 @@ export function WelcomePage({ onDandisetLoaded }: WelcomePageProps) {
             />
 
             <ApiKeyPersistCheckbox
-              checked={persistKey}
-              onChange={setPersistKey}
+              checked={persistKey === 'local'}
+              onChange={(checked) => setPersistKey(checked ? 'local' : 'session')}
             />
 
             <Button

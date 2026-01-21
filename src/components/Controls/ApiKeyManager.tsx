@@ -100,8 +100,8 @@ export function ApiKeyManager() {
             </IconButton>
           </Box>
           <ApiKeyPersistCheckbox
-            checked={persistKey}
-            onChange={setPersistKey}
+            checked={persistKey === 'local'}
+            onChange={(checked) => setPersistKey(checked ? 'local' : 'session')}
           />
         </DialogContent>
         <DialogActions>
