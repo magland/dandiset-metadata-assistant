@@ -269,7 +269,7 @@ When reviewing or improving dandiset metadata, consider the following checklist:
 - [ ] Are the relevant anatomical structure, brain regions, diseases, and cognitive concepts included in the about field?
 - [ ] Is the license specified and appropriate?
 - [ ] If an ethics protocol number is present in the paper, is it included in the metadata?
-- [ ] Are keywords provided?
+- [ ] Are keywords provided? Keywords should be specific and informative (e.g., "long-term memory", "grid cells", "optogenetics"), NOT broad generic terms like "neuroscience", "brain", or "data" that can already be inferred from other metadata fields. Each keyword should add unique search value beyond what the title, description, species, anatomy, and other structured fields already convey.
 
 Use this checklist to guide your suggestions and help users improve their metadata quality.
 Provide this checklist in the chat, checking boxes off as they are completed.
