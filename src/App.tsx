@@ -2,6 +2,7 @@ import { useEffect, useCallback, useState, useRef } from 'react';
 import { ThemeProvider, createTheme, CssBaseline } from '@mui/material';
 import { Box, AppBar, Toolbar, Typography, IconButton, Alert, Snackbar } from '@mui/material';
 import InfoIcon from '@mui/icons-material/Info';
+import GitHubIcon from '@mui/icons-material/GitHub';
 import { MetadataProvider, useMetadataContext } from './context/MetadataContext';
 import logoIcon from '/logo-white.svg';
 import { MainLayout } from './components/Layout/MainLayout';
@@ -244,6 +245,17 @@ function AppContent() {
             >
               <InfoIcon />
             </IconButton>
+            <IconButton
+              color="inherit"
+              component="a"
+              href="https://github.com/magland/dandiset-metadata-assistant"
+              target="_blank"
+              rel="noopener noreferrer"
+              size="small"
+              sx={{ mr: 1 }}
+            >
+              <GitHubIcon />
+            </IconButton>
             <ApiKeyManager />
           </Toolbar>
         </AppBar>
@@ -292,6 +304,17 @@ function AppContent() {
             sx={{ mr: 1 }}
           >
             <InfoIcon />
+          </IconButton>
+          <IconButton
+            color="inherit"
+            component="a"
+            href="https://github.com/magland/dandiset-metadata-assistant"
+            target="_blank"
+            rel="noopener noreferrer"
+            size="small"
+            sx={{ mr: 1 }}
+          >
+            <GitHubIcon />
           </IconButton>
           <ApiKeyManager />
         </Toolbar>
