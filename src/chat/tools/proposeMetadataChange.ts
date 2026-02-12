@@ -153,6 +153,49 @@ export const proposeMetadataChangeTool: QPTool = {
         continue;
       }
 
+      // Validate that contact persons have an email address
+      if (value !== undefined) {
+        const contributorObj = typeof value === 'object' && value !== null ? value as any : null;
+
+        // Case 1: Setting/appending a full contributor object with ContactPerson role but no email
+        if (contributorObj) {
+          const isContributorEntry =
+            ((operation === 'append' || operation === 'insert') && path === 'contributor') ||
+            (operation === 'set' && /^contributor\.\d+$/.test(path));
+          if (isContributorEntry) {
+            const roles: string[] = contributorObj.roleName || [];
+            if (roles.includes('dcite:ContactPerson') && !contributorObj.email) {
+              results.push({
+                success: false,
+                index: i,
+                path,
+                error: `Contact person must have an email address. Please include the "email" field for contributors with the "dcite:ContactPerson" role.`,
+              });
+              allSucceeded = false;
+              continue;
+            }
+          }
+        }
+
+        // Case 2: Setting roleName on an existing contributor to include ContactPerson
+        const roleNameMatch = path.match(/^contributor\.(\d+)\.roleName$/);
+        if (roleNameMatch && Array.isArray(value) && value.includes('dcite:ContactPerson')) {
+          const contribIndex = parseInt(roleNameMatch[1], 10);
+          const currentMetadata = context.modifiedMetadata || context.originalMetadata;
+          const contributor = currentMetadata?.contributor?.[contribIndex];
+          if (contributor && !contributor.email) {
+            results.push({
+              success: false,
+              index: i,
+              path,
+              error: `Contact person must have an email address. The contributor at index ${contribIndex} does not have an email. Please set their email before assigning the "dcite:ContactPerson" role.`,
+            });
+            allSucceeded = false;
+            continue;
+          }
+        }
+      }
+
       // Validate URLs and identifiers (ORCID, ROR IDs) before applying changes
       if (value !== undefined) {
         const validationResult = await validateIdentifierInValue(path, value);

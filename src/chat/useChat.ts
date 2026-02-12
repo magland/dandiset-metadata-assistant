@@ -282,6 +282,7 @@ Guidelines:
 - Use dot notation for nested paths (e.g., "contributor.0.name")
 - For arrays, use numeric indices (e.g., "keywords.0" for the first keyword)
 - **IMPORTANT**: All proposed changes are validated against the DANDI schema. Invalid changes will be rejected with an error message. If a change is rejected, read the error carefully and correct your proposal.
+- **IMPORTANT**: Any contributor with the "dcite:ContactPerson" role MUST have an email address. When adding or modifying a contact person, always include the email field. If the email is not known, ask the user for it before proposing the change.
 
 **TOOL CALL DISCIPLINE:**
 - Do NOT make excessive consecutive tool calls without checking in with the user
