@@ -10,33 +10,54 @@ export interface OwnedDandiset {
   draft_version: {
     version: string;
     name: string;
+    asset_count: number;
+    size: number;
     status: string;
+    modified: string;
   };
 }
 
 export type DandisetSortOrder = 'modified' | '-modified' | 'id' | '-id';
 
-export async function fetchOwnedDandisets(
-  apiKey: string,
-  order: DandisetSortOrder = '-modified'
-): Promise<OwnedDandiset[]> {
-  const url = `${DANDI_API_BASE}/dandisets/?user=me&order=${order}&page_size=100&embargoed=true`;
+export interface DandisetsPage {
+  results: OwnedDandiset[];
+  count: number;
+}
 
-  const response = await fetch(url, {
-    headers: {
-      Authorization: `token ${apiKey}`,
-    },
+export async function fetchDandisets(options: {
+  apiKey?: string | null;
+  onlyMine?: boolean;
+  order?: DandisetSortOrder;
+  page?: number;
+  pageSize?: number;
+}): Promise<DandisetsPage> {
+  const { apiKey, onlyMine = false, order = '-modified', page = 1, pageSize = 25 } = options;
+  const params = new URLSearchParams({
+    order,
+    page: String(page),
+    page_size: String(pageSize),
   });
+  if (onlyMine) {
+    params.set('user', 'me');
+    params.set('embargoed', 'true');
+  }
+
+  const headers: HeadersInit = {};
+  if (apiKey) {
+    headers['Authorization'] = `token ${apiKey}`;
+  }
+
+  const response = await fetch(`${DANDI_API_BASE}/dandisets/?${params}`, { headers });
 
   if (!response.ok) {
     if (response.status === 401) {
       throw new Error('Invalid API key');
     }
-    throw new Error(`Failed to fetch owned dandisets: ${response.statusText}`);
+    throw new Error(`Failed to fetch dandisets: ${response.statusText}`);
   }
 
   const data = await response.json();
-  return data.results as OwnedDandiset[];
+  return { results: data.results as OwnedDandiset[], count: data.count as number };
 }
 
 export async function fetchDandisetVersionInfo(
