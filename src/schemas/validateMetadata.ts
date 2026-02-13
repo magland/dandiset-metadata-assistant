@@ -1,10 +1,11 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import Ajv, { ErrorObject } from "ajv";
+import Ajv2020, { ErrorObject } from "ajv/dist/2020";
 import addFormats from "ajv-formats";
 import { fetchSchema, getCachedSchema } from "./schemaService";
 
-// Create and configure Ajv instance
-const ajv = new Ajv({
+// Create and configure Ajv instance with JSON Schema 2020-12 support
+// (the DANDI schema uses "$schema": "https://json-schema.org/draft/2020-12/schema")
+const ajv = new Ajv2020({
   allErrors: true, // Report all errors, not just the first one
   strict: false, // Disable strict mode to allow schema keywords like nskey, sameas, etc.
   validateFormats: true,

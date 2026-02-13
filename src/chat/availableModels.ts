@@ -62,6 +62,14 @@ export const AVAILABLE_MODELS = [
       prompt: 0.47,
       completion: 2
     }
+  },
+  {
+    model: "google/gemini-3-flash-preview",
+    label: "gemini-3-flash-preview",
+    cost: {
+      prompt: 0.15,
+      completion: 0.6,
+    },
   }
 ];
 
@@ -71,7 +79,8 @@ export const CHEAP_MODELS = [
   "openai/gpt-5-mini",
   "openai/gpt-4o-mini",
   "google/gemini-2.5-flash",
-  "moonshotai/kimi-k2-thinking"
+  "moonshotai/kimi-k2-thinking",
+  "google/gemini-3-flash-preview"
 ];
 
 export const DEFAULT_MODEL = "google/gemini-2.5-flash";
