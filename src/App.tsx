@@ -1,6 +1,6 @@
 import { useEffect, useCallback, useState, useRef } from 'react';
 import { ThemeProvider, createTheme, CssBaseline } from '@mui/material';
-import { Box, AppBar, Toolbar, Typography, IconButton, Alert, Snackbar } from '@mui/material';
+import { Box, AppBar, Toolbar, Typography, IconButton, Alert, Snackbar, Tooltip } from '@mui/material';
 import InfoIcon from '@mui/icons-material/Info';
 import GitHubIcon from '@mui/icons-material/GitHub';
 import { MetadataProvider, useMetadataContext } from './context/MetadataContext';
@@ -229,34 +229,49 @@ function AppContent() {
 
   if (showWelcome) {
     return (
-      <Box sx={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
+      <Box sx={{ display: 'flex', flexDirection: 'column', height: '100vh', width: '100%', overflow: 'hidden' }}>
         {/* Minimal App Bar for welcome page */}
         <AppBar position="static" elevation={1}>
-          <Toolbar variant="dense">
-            <Box component="img" src={logoIcon} alt="Logo" sx={{ height: 24, mr: 1 }} />
-            <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
+          <Toolbar variant="dense" sx={{ minHeight: { xs: 48, sm: 48 }, px: { xs: 1, sm: 2 } }}>
+            <Box component="img" src={logoIcon} alt="Logo" sx={{ height: 24, mr: { xs: 0.5, sm: 1 } }} />
+            <Typography
+              variant="h6"
+              component="div"
+              sx={{
+                flexGrow: 1,
+                fontSize: { xs: '0.9rem', sm: '1.25rem' },
+                whiteSpace: 'nowrap',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                mr: { xs: 0.5, sm: 2 },
+                display: { xs: 'none', sm: 'block' }
+              }}
+            >
               Dandiset Metadata Assistant
             </Typography>
+            <Box sx={{ flexGrow: { xs: 1, sm: 0 } }} />
             <IconButton
               color="inherit"
               onClick={() => setAboutDialogOpen(true)}
               size="small"
-              sx={{ mr: 1 }}
+              sx={{ mr: { xs: 0.5, sm: 1 }, flexShrink: 0 }}
             >
               <InfoIcon />
             </IconButton>
-            <IconButton
-              color="inherit"
-              component="a"
-              href="https://github.com/magland/dandiset-metadata-assistant"
-              target="_blank"
-              rel="noopener noreferrer"
-              size="small"
-              sx={{ mr: 1 }}
-            >
-              <GitHubIcon />
-            </IconButton>
-            <ApiKeyManager />
+              <Box sx={{ flexShrink: 0 }}>
+              <IconButton
+                color="inherit"
+                component="a"
+                href="https://github.com/magland/dandiset-metadata-assistant"
+                target="_blank"
+                rel="noopener noreferrer"
+                size="small"
+                sx={{ mr: 1 }}
+              >
+                <GitHubIcon />
+              </IconButton>
+              <ApiKeyManager />
+            </Box>
           </Toolbar>
         </AppBar>
 
@@ -275,17 +290,38 @@ function AppContent() {
   }
 
   return (
-    <Box sx={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
+    <Box sx={{ display: 'flex', flexDirection: 'column', height: '100vh', width: '100%', overflow: 'hidden' }}>
       {/* App Bar with loaded dandiset */}
       <AppBar position="static" elevation={1}>
-        <Toolbar variant="dense">
-          <Box component="img" src={logoIcon} alt="Logo" sx={{ height: 24, mr: 1 }} />
+        <Toolbar variant="dense" sx={{ minHeight: { xs: 48, sm: 48 }, px: { xs: 1, sm: 2 } }}>
+          <Tooltip title="Go to welcome screen">
+            <IconButton
+              color="inherit"
+              onClick={handleChangeDandiset}
+              size="small"
+              sx={{
+                mr: { xs: 0.5, sm: 1 },
+                flexShrink: 0,
+                display: { xs: 'inline-flex', sm: 'none' }
+              }}
+            >
+              <Box component="img" src={logoIcon} alt="Logo" sx={{ height: 20 }} />
+            </IconButton>
+          </Tooltip>
+          <Box component="img" src={logoIcon} alt="Logo" sx={{ height: 24, mr: { xs: 0.5, sm: 1 }, display: { xs: 'none', sm: 'block' } }} />
           <Typography
             variant="h6"
             component="div"
             sx={{
-              mr: 3,
+              mr: { xs: 1, sm: 3 },
               cursor: 'pointer',
+              fontSize: { xs: '0.9rem', sm: '1.25rem' },
+              whiteSpace: 'nowrap',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              flexShrink: 1,
+              minWidth: 0,
+              display: { xs: 'none', sm: 'block' },
               '&:hover': {
                 opacity: 0.8,
               }
@@ -294,29 +330,31 @@ function AppContent() {
           >
             Dandiset Metadata Assistant
           </Typography>
-          <Box sx={{ flexGrow: 1 }}>
+          <Box sx={{ flexGrow: 1, minWidth: 0 }}>
             <DandisetIndicator onChangeDandiset={handleChangeDandiset} />
           </Box>
           <IconButton
             color="inherit"
             onClick={() => setAboutDialogOpen(true)}
             size="small"
-            sx={{ mr: 1 }}
+            sx={{ mr: { xs: 0.5, sm: 1 }, flexShrink: 0 }}
           >
             <InfoIcon />
           </IconButton>
-          <IconButton
-            color="inherit"
-            component="a"
-            href="https://github.com/magland/dandiset-metadata-assistant"
-            target="_blank"
-            rel="noopener noreferrer"
-            size="small"
-            sx={{ mr: 1 }}
-          >
-            <GitHubIcon />
-          </IconButton>
-          <ApiKeyManager />
+          <Box sx={{ flexShrink: 0 }}>          
+            <IconButton
+              color="inherit"
+              component="a"
+              href="https://github.com/magland/dandiset-metadata-assistant"
+              target="_blank"
+              rel="noopener noreferrer"
+              size="small"
+              sx={{ mr: 1 }}
+            >
+              <GitHubIcon />
+            </IconButton>
+            <ApiKeyManager />
+          </Box>
         </Toolbar>
       </AppBar>
 
