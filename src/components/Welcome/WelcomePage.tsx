@@ -7,26 +7,32 @@ import {
   Alert,
   Typography,
   Paper,
-  List,
-  ListItemButton,
-  ListItemText,
-  ToggleButtonGroup,
-  ToggleButton,
   IconButton,
   InputAdornment,
   Divider,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  Chip,
+  FormControlLabel,
+  Checkbox,
+  TableSortLabel,
 } from '@mui/material';
 import SearchIcon from '@mui/icons-material/Search';
 import ScienceIcon from '@mui/icons-material/Science';
 import KeyIcon from '@mui/icons-material/Key';
-import SortIcon from '@mui/icons-material/Sort';
 import VisibilityIcon from '@mui/icons-material/Visibility';
 import VisibilityOffIcon from '@mui/icons-material/VisibilityOff';
 import LockIcon from '@mui/icons-material/Lock';
+import NavigateBeforeIcon from '@mui/icons-material/NavigateBefore';
+import NavigateNextIcon from '@mui/icons-material/NavigateNext';
 import { useMetadataContext } from '../../context/MetadataContext';
 import {
   fetchDandisetVersionInfo,
-  fetchOwnedDandisets,
+  fetchDandisets,
   type OwnedDandiset,
   type DandisetSortOrder,
 } from '../../utils/api';
@@ -36,6 +42,8 @@ import { ApiKeyPersistCheckbox } from '../Controls/ApiKeyPersistCheckbox';
 interface WelcomePageProps {
   onDandisetLoaded: (dandisetId: string) => void;
 }
+
+const PAGE_SIZE = 25;
 
 export function WelcomePage({ onDandisetLoaded }: WelcomePageProps) {
   const {
@@ -55,28 +63,46 @@ export function WelcomePage({ onDandisetLoaded }: WelcomePageProps) {
   const [localApiKey, setLocalApiKey] = useState('');
   const [showApiKey, setShowApiKey] = useState(false);
   const [persistKey, setPersistKey] = useState(getCurrentStorageType());
-  const [ownedDandisets, setOwnedDandisets] = useState<OwnedDandiset[]>([]);
+  const [dandisets, setDandisets] = useState<OwnedDandiset[]>([]);
+  const [totalCount, setTotalCount] = useState(0);
   const [sortOrder, setSortOrder] = useState<DandisetSortOrder>('-modified');
+  const [onlyMine, setOnlyMine] = useState(false);
+  const [page, setPage] = useState(1);
+  const [hideEmpty, setHideEmpty] = useState(true);
   const [isLoadingDandisets, setIsLoadingDandisets] = useState(false);
 
-  // Fetch owned dandisets when API key is present
+  // Fetch dandisets
   useEffect(() => {
-    if (apiKey) {
-      setIsLoadingDandisets(true);
-      fetchOwnedDandisets(apiKey, sortOrder)
-        .then((dandisets) => {
-          setOwnedDandisets(dandisets);
-          setError(null);
-        })
-        .catch((err) => {
-          setError(err instanceof Error ? err.message : 'Failed to fetch dandisets');
-          setOwnedDandisets([]);
-        })
-        .finally(() => {
-          setIsLoadingDandisets(false);
-        });
-    }
-  }, [apiKey, sortOrder, setError]);
+    // "My dandisets" requires an API key
+    if (onlyMine && !apiKey) return;
+
+    setIsLoadingDandisets(true);
+    fetchDandisets({
+      apiKey,
+      onlyMine,
+      order: sortOrder,
+      page,
+      pageSize: PAGE_SIZE,
+    })
+      .then(({ results, count }) => {
+        setDandisets(results);
+        setTotalCount(count);
+        setError(null);
+      })
+      .catch((err) => {
+        setError(err instanceof Error ? err.message : 'Failed to fetch dandisets');
+        setDandisets([]);
+        setTotalCount(0);
+      })
+      .finally(() => {
+        setIsLoadingDandisets(false);
+      });
+  }, [apiKey, sortOrder, onlyMine, page, setError]);
+
+  // Reset to page 1 when filters change
+  useEffect(() => {
+    setPage(1);
+  }, [sortOrder, onlyMine]);
 
   const handleSaveApiKey = () => {
     if (localApiKey.trim()) {
@@ -134,101 +160,12 @@ export function WelcomePage({ onDandisetLoaded }: WelcomePageProps) {
     });
   };
 
-  // No API key - show prompt to enter one
-  if (!apiKey) {
-    return (
-      <Box
-        sx={{
-          height: '100%',
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          justifyContent: 'center',
-          backgroundColor: 'grey.50',
-          p: 3,
-        }}
-      >
-        <Paper
-          elevation={3}
-          sx={{
-            p: 4,
-            maxWidth: 500,
-            width: '100%',
-            textAlign: 'center',
-          }}
-        >
-          {/* Header */}
-          <Box sx={{ mb: 4 }}>
-            <ScienceIcon sx={{ fontSize: 64, color: 'primary.main', mb: 2 }} />
-            <Typography variant="h4" gutterBottom>
-              Dandiset Metadata Assistant
-            </Typography>
-            <Typography variant="body1" color="text.secondary">
-              Enter your DANDI API key to get started
-            </Typography>
-          </Box>
+  const filteredDandisets = hideEmpty
+    ? dandisets.filter((d) => d.draft_version.size > 0)
+    : dandisets;
 
-          {/* API Key Form */}
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, textAlign: 'left' }}>
-            <TextField
-              label="DANDI API Key"
-              type={showApiKey ? 'text' : 'password'}
-              value={localApiKey}
-              onChange={(e) => setLocalApiKey(e.target.value)}
-              onKeyPress={handleApiKeyKeyPress}
-              fullWidth
-              autoFocus
-              placeholder="Enter your API key"
-              InputProps={{
-                endAdornment: (
-                  <InputAdornment position="end">
-                    <IconButton onClick={() => setShowApiKey(!showApiKey)} edge="end">
-                      {showApiKey ? <VisibilityOffIcon /> : <VisibilityIcon />}
-                    </IconButton>
-                  </InputAdornment>
-                ),
-              }}
-            />
+  const totalPages = Math.ceil(totalCount / PAGE_SIZE);
 
-            <ApiKeyPersistCheckbox
-              checked={persistKey === 'local'}
-              onChange={(checked) => setPersistKey(checked ? 'local' : 'session')}
-            />
-
-            <Button
-              variant="contained"
-              size="large"
-              onClick={handleSaveApiKey}
-              disabled={!localApiKey.trim()}
-              startIcon={<KeyIcon />}
-            >
-              Save API Key
-            </Button>
-
-            <Typography variant="body2" color="text.secondary">
-              You can get your API key from your{' '}
-              <a
-                href="https://dandiarchive.org/account/settings"
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                DANDI account settings
-              </a>
-              .
-            </Typography>
-
-            {error && (
-              <Alert severity="error" onClose={() => setError(null)}>
-                {error}
-              </Alert>
-            )}
-          </Box>
-        </Paper>
-      </Box>
-    );
-  }
-
-  // Has API key - show owned dandisets list
   return (
     <Box
       sx={{
@@ -245,7 +182,7 @@ export function WelcomePage({ onDandisetLoaded }: WelcomePageProps) {
         elevation={3}
         sx={{
           p: 4,
-          maxWidth: 600,
+          maxWidth: 950,
           width: '100%',
           display: 'flex',
           flexDirection: 'column',
@@ -262,6 +199,53 @@ export function WelcomePage({ onDandisetLoaded }: WelcomePageProps) {
             Select a dandiset to edit or enter an ID manually
           </Typography>
         </Box>
+
+        {/* API Key Section */}
+        {!apiKey ? (
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mb: 3 }}>
+            <TextField
+              label="DANDI API Key (optional)"
+              type={showApiKey ? 'text' : 'password'}
+              value={localApiKey}
+              onChange={(e) => setLocalApiKey(e.target.value)}
+              onKeyPress={handleApiKeyKeyPress}
+              fullWidth
+              size="small"
+              placeholder="Enter API key to see your dandisets and commit changes"
+              InputProps={{
+                endAdornment: (
+                  <InputAdornment position="end">
+                    <IconButton onClick={() => setShowApiKey(!showApiKey)} edge="end" size="small">
+                      {showApiKey ? <VisibilityOffIcon /> : <VisibilityIcon />}
+                    </IconButton>
+                  </InputAdornment>
+                ),
+              }}
+            />
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+              <ApiKeyPersistCheckbox
+                checked={persistKey === 'local'}
+                onChange={(checked) => setPersistKey(checked ? 'local' : 'session')}
+              />
+              <Button
+                variant="contained"
+                size="small"
+                onClick={handleSaveApiKey}
+                disabled={!localApiKey.trim()}
+                startIcon={<KeyIcon />}
+              >
+                Save Key
+              </Button>
+            </Box>
+            <Typography variant="caption" color="text.secondary">
+              Get your API key from{' '}
+              <a href="https://dandiarchive.org/account/settings" target="_blank" rel="noopener noreferrer">
+                DANDI account settings
+              </a>
+              . An API key is only required to filter by your dandisets and to commit changes.
+            </Typography>
+          </Box>
+        ) : null}
 
         {/* Manual ID Entry */}
         <Box sx={{ display: 'flex', gap: 1, mb: 3 }}>
@@ -293,115 +277,172 @@ export function WelcomePage({ onDandisetLoaded }: WelcomePageProps) {
 
         <Divider sx={{ mb: 2 }} />
 
-        {/* Sort Controls */}
-        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
+        {/* Filter Controls */}
+        <Box sx={{ display: 'flex', alignItems: 'center', mb: 2, gap: 1 }}>
           <Typography variant="subtitle2" color="text.secondary">
-            Your Dandisets ({ownedDandisets.length})
+            {onlyMine ? 'My' : 'All'} Dandisets ({totalCount.toLocaleString()})
           </Typography>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <SortIcon fontSize="small" color="action" />
-            <ToggleButtonGroup
-              value={sortOrder}
-              exclusive
-              onChange={(_, value) => value && setSortOrder(value)}
-              size="small"
-            >
-              <ToggleButton value="-modified">Recent</ToggleButton>
-              <ToggleButton value="id">ID ↑</ToggleButton>
-              <ToggleButton value="-id">ID ↓</ToggleButton>
-            </ToggleButtonGroup>
-          </Box>
+          <FormControlLabel
+            control={
+              <Checkbox
+                checked={hideEmpty}
+                onChange={(e) => setHideEmpty(e.target.checked)}
+                size="small"
+              />
+            }
+            label={<Typography variant="body2">Hide empty</Typography>}
+            sx={{ ml: 1 }}
+          />
+          {apiKey && (
+            <FormControlLabel
+              control={
+                <Checkbox
+                  checked={onlyMine}
+                  onChange={(e) => setOnlyMine(e.target.checked)}
+                  size="small"
+                />
+              }
+              label={<Typography variant="body2">Only mine</Typography>}
+            />
+          )}
         </Box>
 
-        {/* Dandisets List */}
+        {/* Dandisets Table */}
         {isLoadingDandisets ? (
           <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
             <CircularProgress />
           </Box>
-        ) : ownedDandisets.length === 0 ? (
+        ) : filteredDandisets.length === 0 ? (
           <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center', py: 4 }}>
-            No dandisets found. Create one on{' '}
-            <a href="https://dandiarchive.org" target="_blank" rel="noopener noreferrer">
-              dandiarchive.org
-            </a>
+            No dandisets found.
           </Typography>
         ) : (
-          <List sx={{ overflow: 'auto', flex: '1 1 auto', minHeight: 0 }}>
-            {ownedDandisets.map((dandiset) => (
-              <ListItemButton
-                key={dandiset.identifier}
-                onClick={() => handleLoadDandiset(dandiset.identifier)}
-                disabled={isLoading}
-                sx={{
-                  borderRadius: 1,
-                  mb: 0.5,
-                  '&:hover': { backgroundColor: 'action.hover' },
-                }}
-              >
-                <ListItemText
-                  primary={
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                      <Typography variant="body1" fontWeight="medium">
+          <TableContainer sx={{ flex: '1 1 auto', minHeight: 0, overflow: 'auto' }}>
+            <Table size="small" stickyHeader>
+              <TableHead>
+                <TableRow>
+                  <TableCell sx={{ fontWeight: 600, width: 100 }}>
+                    <TableSortLabel
+                      active={sortOrder === 'id' || sortOrder === '-id'}
+                      direction={sortOrder === '-id' ? 'desc' : 'asc'}
+                      onClick={() => {
+                        if (sortOrder === 'id') setSortOrder('-id');
+                        else setSortOrder('id');
+                      }}
+                    >
+                      ID
+                    </TableSortLabel>
+                  </TableCell>
+                  <TableCell sx={{ fontWeight: 600 }}>Name</TableCell>
+                  <TableCell sx={{ fontWeight: 600, width: 120, whiteSpace: 'nowrap' }}>
+                    <TableSortLabel
+                      active={sortOrder === 'modified' || sortOrder === '-modified'}
+                      direction={sortOrder === '-modified' ? 'desc' : 'asc'}
+                      onClick={() => {
+                        if (sortOrder === '-modified') setSortOrder('modified');
+                        else setSortOrder('-modified');
+                      }}
+                    >
+                      Modified
+                    </TableSortLabel>
+                  </TableCell>
+                  <TableCell sx={{ fontWeight: 600, width: 80 }}>Status</TableCell>
+                  <TableCell sx={{ fontWeight: 600, width: 100 }}>Stage</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {filteredDandisets.map((dandiset) => (
+                  <TableRow
+                    key={dandiset.identifier}
+                    hover
+                    onClick={() => handleLoadDandiset(dandiset.identifier)}
+                    sx={{ cursor: isLoading ? 'default' : 'pointer' }}
+                  >
+                    <TableCell>
+                      <Typography variant="body2" fontWeight="medium">
                         {dandiset.identifier}
                       </Typography>
-                      <Typography
-                        variant="caption"
-                        sx={{
-                          px: 1,
-                          py: 0.25,
-                          borderRadius: 1,
-                          backgroundColor:
-                            dandiset.draft_version.status === 'Valid'
-                              ? 'success.light'
-                              : 'error.light',
-                          color: 'white',
-                        }}
-                      >
-                        {dandiset.draft_version.status}
-                      </Typography>
-                      {dandiset.embargo_status === 'EMBARGOED' && (
-                        <Box
-                          sx={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: 0.5,
-                            px: 1,
-                            py: 0.25,
-                            borderRadius: 1,
-                            backgroundColor: 'warning.light',
-                            color: 'white',
-                          }}
-                        >
-                          <LockIcon sx={{ fontSize: 14 }} />
-                          <Typography variant="caption">Embargoed</Typography>
-                        </Box>
-                      )}
-                    </Box>
-                  }
-                  secondary={
-                    <Box component="span">
+                    </TableCell>
+                    <TableCell>
                       <Typography
                         variant="body2"
-                        component="span"
-                        color="text.secondary"
                         sx={{
-                          display: 'block',
                           overflow: 'hidden',
                           textOverflow: 'ellipsis',
                           whiteSpace: 'nowrap',
+                          maxWidth: 400,
                         }}
                       >
                         {dandiset.draft_version.name}
                       </Typography>
-                      <Typography variant="caption" component="span" color="text.secondary">
-                        Modified: {formatDate(dandiset.modified)}
+                    </TableCell>
+                    <TableCell>
+                      <Typography variant="caption" color="text.secondary" noWrap>
+                        {formatDate(dandiset.draft_version.modified)}
                       </Typography>
-                    </Box>
-                  }
-                />
-              </ListItemButton>
-            ))}
-          </List>
+                    </TableCell>
+                    <TableCell>
+                      <Chip
+                        label={
+                          dandiset.draft_version.status === 'Valid' ? 'Valid'
+                            : dandiset.draft_version.status === 'Pending' ? 'Pending'
+                            : 'Invalid'
+                        }
+                        size="small"
+                        color={
+                          dandiset.draft_version.status === 'Valid' ? 'success'
+                            : dandiset.draft_version.status === 'Pending' ? 'warning'
+                            : 'error'
+                        }
+                        sx={{ fontSize: '0.65rem', height: 20 }}
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <Chip
+                        label={
+                          dandiset.embargo_status === 'EMBARGOED' ? 'Embargoed'
+                            : dandiset.draft_version.status === 'Published' ? 'Published'
+                            : 'Draft'
+                        }
+                        size="small"
+                        variant="outlined"
+                        icon={dandiset.embargo_status === 'EMBARGOED' ? <LockIcon sx={{ fontSize: '14px !important' }} /> : undefined}
+                        color={
+                          dandiset.embargo_status === 'EMBARGOED' ? 'warning'
+                            : dandiset.draft_version.status === 'Published' ? 'primary'
+                            : 'default'
+                        }
+                        sx={{ fontSize: '0.65rem', height: 20 }}
+                      />
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        )}
+
+        {/* Pagination */}
+        {totalPages > 1 && (
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 1, mt: 2 }}>
+            <IconButton
+              size="small"
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              disabled={page <= 1 || isLoadingDandisets}
+            >
+              <NavigateBeforeIcon />
+            </IconButton>
+            <Typography variant="body2" color="text.secondary">
+              Page {page} of {totalPages}
+            </Typography>
+            <IconButton
+              size="small"
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              disabled={page >= totalPages || isLoadingDandisets}
+            >
+              <NavigateNextIcon />
+            </IconButton>
+          </Box>
         )}
       </Paper>
     </Box>

@@ -14,6 +14,9 @@ import {
 } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import UndoIcon from '@mui/icons-material/Undo';
+import DeleteIcon from '@mui/icons-material/Delete';
+import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward';
+import ArrowDownwardIcon from '@mui/icons-material/ArrowDownward';
 import TitleIcon from '@mui/icons-material/Title';
 import DescriptionIcon from '@mui/icons-material/Description';
 import LabelIcon from '@mui/icons-material/Label';
@@ -442,17 +445,23 @@ function ComplexArrayDisplay({
   items,
   fieldKey,
   changedPaths,
+  onDelete,
+  onMoveUp,
+  onMoveDown,
 }: {
   items: unknown[];
   fieldKey: string;
   changedPaths: Set<string>;
+  onDelete?: (index: number) => void;
+  onMoveUp?: (index: number) => void;
+  onMoveDown?: (index: number) => void;
 }) {
   const [expanded, setExpanded] = useState<number | false>(false);
-  
+
   if (!items || items.length === 0) {
     return <Typography variant="body2" color="text.secondary">None</Typography>;
   }
-  
+
   return (
     <Box>
       {items.map((item, idx) => {
@@ -461,11 +470,11 @@ function ComplexArrayDisplay({
         const isItemModified = Array.from(changedPaths).some(
           (p) => p === itemPath || p.startsWith(`${itemPath}.`) || p.startsWith(`${itemPath}[`)
         );
-        
+
         const obj = item as Record<string, unknown>;
         const displayName = getObjectDisplayName(obj);
         const schemaKey = obj.schemaKey as string | undefined;
-        
+
         // Get modified paths relative to this item
         const itemModifiedPaths = new Set<string>();
         changedPaths.forEach((p) => {
@@ -473,7 +482,7 @@ function ComplexArrayDisplay({
             itemModifiedPaths.add(p.slice(itemPath.length + 1));
           }
         });
-        
+
         return (
           <Accordion
             key={idx}
@@ -498,9 +507,54 @@ function ComplexArrayDisplay({
                 {isItemModified && (
                   <Chip label="modified" size="small" color="warning" sx={{ fontSize: '0.65rem', height: 18 }} />
                 )}
-                <Typography variant="body2" sx={{ width: '100%', wordBreak: 'break-word' }}>
+                <Typography variant="body2" sx={{ flex: 1, wordBreak: 'break-word' }}>
                   {displayName}
                 </Typography>
+                <Box
+                  sx={{ display: 'flex', ml: 'auto' }}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {onMoveUp && (
+                    <Tooltip title="Move up">
+                      <span>
+                        <IconButton
+                          size="small"
+                          onClick={() => onMoveUp(idx)}
+                          disabled={idx === 0}
+                          sx={{ p: 0.25 }}
+                        >
+                          <ArrowUpwardIcon sx={{ fontSize: 16 }} />
+                        </IconButton>
+                      </span>
+                    </Tooltip>
+                  )}
+                  {onMoveDown && (
+                    <Tooltip title="Move down">
+                      <span>
+                        <IconButton
+                          size="small"
+                          onClick={() => onMoveDown(idx)}
+                          disabled={idx === items.length - 1}
+                          sx={{ p: 0.25 }}
+                        >
+                          <ArrowDownwardIcon sx={{ fontSize: 16 }} />
+                        </IconButton>
+                      </span>
+                    </Tooltip>
+                  )}
+                  {onDelete && (
+                    <Tooltip title="Delete">
+                      <IconButton
+                        size="small"
+                        onClick={() => onDelete(idx)}
+                        color="error"
+                        sx={{ p: 0.25 }}
+                      >
+                        <DeleteIcon sx={{ fontSize: 16 }} />
+                      </IconButton>
+                    </Tooltip>
+                  )}
+                </Box>
               </Box>
             </AccordionSummary>
             <AccordionDetails sx={{ pt: 0 }}>
@@ -636,6 +690,7 @@ function SectionDisplay({
   isFieldModified,
   revertField,
   onEditField,
+  modifyMetadata,
 }: {
   section: SectionDef;
   modifiedMetadata: Record<string, unknown>;
@@ -643,6 +698,7 @@ function SectionDisplay({
   isFieldModified: (key: string) => boolean;
   revertField: (key: string) => void;
   onEditField: (key: string, value: unknown) => { success: boolean; error?: string };
+  modifyMetadata: (operation: string, path: string, value?: unknown) => { success: boolean; error?: string };
 }) {
   const SectionIcon = section.icon;
   
@@ -890,6 +946,26 @@ function SectionDisplay({
                     items={value as unknown[]}
                     fieldKey={field.key}
                     changedPaths={changedPaths}
+                    onDelete={(idx) => {
+                      const result = modifyMetadata('delete', `${field.key}.${idx}`);
+                      if (!result.success) console.error('Delete failed:', result.error);
+                    }}
+                    onMoveUp={(idx) => {
+                      if (idx <= 0) return;
+                      const arr = [...(value as unknown[])];
+                      const [item] = arr.splice(idx, 1);
+                      arr.splice(idx - 1, 0, item);
+                      const result = modifyMetadata('set', field.key, arr);
+                      if (!result.success) console.error('Move up failed:', result.error);
+                    }}
+                    onMoveDown={(idx) => {
+                      const arr = [...(value as unknown[])];
+                      if (idx >= arr.length - 1) return;
+                      const [item] = arr.splice(idx, 1);
+                      arr.splice(idx + 1, 0, item);
+                      const result = modifyMetadata('set', field.key, arr);
+                      if (!result.success) console.error('Move down failed:', result.error);
+                    }}
                   />
                 </Box>
               </Box>
@@ -1010,6 +1086,7 @@ export function EditableMetadataView() {
           isFieldModified={isFieldModified}
           revertField={revertField}
           onEditField={handleEditField}
+          modifyMetadata={modifyMetadata}
         />
       ))}
     </Box>

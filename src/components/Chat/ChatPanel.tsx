@@ -59,6 +59,7 @@ export function ChatPanel() {
     modifyMetadata,
     dandisetId,
     version,
+    versionInfo,
   });
 
   const [newPrompt, setNewPrompt] = useState<string>("");

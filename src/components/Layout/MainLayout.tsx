@@ -64,6 +64,7 @@ export function MainLayout({
       ref={containerRef}
       sx={{
         display: 'flex',
+        flexDirection: { xs: 'column', md: 'row' },
         height: '100%',
         width: '100%',
         overflow: 'hidden',
@@ -72,8 +73,8 @@ export function MainLayout({
       {/* Left Panel */}
       <Box
         sx={{
-          width: `${leftWidth}%`,
-          height: '100%',
+          width: { xs: '100%', md: `${leftWidth}%` },
+          height: { xs: '50%', md: '100%' },
           overflow: 'auto',
           flexShrink: 0,
         }}
@@ -85,12 +86,13 @@ export function MainLayout({
       <Box
         onMouseDown={handleMouseDown}
         sx={{
-          width: '6px',
-          height: '100%',
+          width: { xs: '100%', md: '6px' },
+          height: { xs: '6px', md: '100%' },
           backgroundColor: isDragging ? 'primary.main' : 'divider',
-          cursor: 'col-resize',
+          cursor: { xs: 'row-resize', md: 'col-resize' },
           flexShrink: 0,
           transition: isDragging ? 'none' : 'background-color 0.2s',
+          display: { xs: 'none', md: 'block' },
           '&:hover': {
             backgroundColor: 'primary.light',
           },
@@ -101,7 +103,7 @@ export function MainLayout({
       <Box
         sx={{
           flex: 1,
-          height: '100%',
+          height: { xs: '50%', md: '100%' },
           overflow: 'auto',
           minWidth: 0,
         }}
