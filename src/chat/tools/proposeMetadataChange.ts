@@ -153,6 +153,36 @@ export const proposeMetadataChangeTool: QPTool = {
         continue;
       }
 
+      // Validate award numbers don't contain descriptive prefixes
+      if (value !== undefined) {
+        const awardNumbersToCheck: { awardNumber: string; location: string }[] = [];
+
+        // Direct awardNumber field (e.g., path = "contributor.0.awardNumber")
+        if (/\.awardNumber$/.test(path) && typeof value === 'string') {
+          awardNumbersToCheck.push({ awardNumber: value, location: path });
+        }
+        // Object with awardNumber property (e.g., appending a funder object)
+        if (typeof value === 'object' && value !== null && (value as any).awardNumber) {
+          awardNumbersToCheck.push({ awardNumber: (value as any).awardNumber, location: `${path}.awardNumber` });
+        }
+
+        const prefixPattern = /^(project\s*(number|no\.?|#)?|grant\s*(number|no\.?|#)?|award\s*(number|no\.?|#)?|no\.?|#)\s*/i;
+        for (const { awardNumber, location } of awardNumbersToCheck) {
+          if (prefixPattern.test(awardNumber)) {
+            const cleaned = awardNumber.replace(prefixPattern, '').trim();
+            results.push({
+              success: false,
+              index: i,
+              path,
+              error: `Award number at "${location}" should be only the identifier (e.g., "${cleaned}"), not prefixed with descriptive text like "${awardNumber}".`,
+            });
+            allSucceeded = false;
+            continue;
+          }
+        }
+        if (!allSucceeded && results[results.length - 1]?.index === i) continue;
+      }
+
       // Validate URLs and identifiers (ORCID, ROR IDs) before applying changes
       if (value !== undefined) {
         const validationResult = await validateIdentifierInValue(path, value);

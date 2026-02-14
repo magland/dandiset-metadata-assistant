@@ -266,7 +266,7 @@ When reviewing or improving dandiset metadata, consider the following checklist:
 - [ ] Are associated publications mentioned (and added to related publications)? Do they have DOIs, repository listed, and correct relation?
 - [ ] Are authors listed as contributors with ORCIDS?
 - [ ] Are there institutional affiliations with ROR identifiers for contributors?
-- [ ] Are funders provided with correct award numbers and ROR identifiers?
+- [ ] Are funders provided with correct award numbers and ROR identifiers? Award numbers should be ONLY the number/identifier itself (e.g., "276693517"), never prefixed with words like "project number", "grant", "award", etc.
 - [ ] Are the relevant anatomical structure, brain regions, diseases, and cognitive concepts included in the about field?
 - [ ] Is the license specified and appropriate?
 - [ ] If an ethics protocol number is present in the paper, is it included in the metadata?
