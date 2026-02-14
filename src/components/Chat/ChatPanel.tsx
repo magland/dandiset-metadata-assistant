@@ -9,6 +9,7 @@ import {
   Chip,
   Tooltip,
   Button,
+  TextField,
 } from "@mui/material";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import ExpandLessIcon from "@mui/icons-material/ExpandLess";
@@ -18,6 +19,7 @@ import RefreshIcon from "@mui/icons-material/Refresh";
 import StopIcon from "@mui/icons-material/Stop";
 import DownloadIcon from "@mui/icons-material/Download";
 import CompressIcon from "@mui/icons-material/Compress";
+import CloseIcon from "@mui/icons-material/Close";
 import { useMetadataContext } from "../../context/MetadataContext";
 import useChat from "../../chat/useChat";
 import { CHEAP_MODELS } from "../../chat/availableModels";
@@ -53,6 +55,9 @@ export function ChatPanel() {
     compressConversation,
     currentSuggestions,
     loadingInitialSuggestions,
+    messageQueue,
+    removeQueuedMessage,
+    updateQueuedMessage,
   } = useChat({
     originalMetadata,
     modifiedMetadata,
@@ -66,6 +71,8 @@ export function ChatPanel() {
   const [settingsOpen, setSettingsOpen] = useState<boolean>(false);
   const [compressDialogOpen, setCompressDialogOpen] = useState<boolean>(false);
   const [errorExpanded, setErrorExpanded] = useState<boolean>(false);
+  const [editingQueueIndex, setEditingQueueIndex] = useState<number | null>(null);
+  const [editingQueueText, setEditingQueueText] = useState<string>("");
   const conversationRef = useRef<HTMLDivElement>(null);
 
   // Get compression threshold from URL query parameter (for testing)
@@ -100,10 +107,10 @@ export function ChatPanel() {
   }, [allMessages]);
 
   const handleSubmit = useCallback(() => {
-    if (newPrompt.trim() === "" || responding || compressing || needsApiKey) return;
+    if (newPrompt.trim() === "" || compressing || needsApiKey) return;
     submitUserMessage(newPrompt.trim());
     setNewPrompt("");
-  }, [newPrompt, submitUserMessage, responding, compressing, needsApiKey]);
+  }, [newPrompt, submitUserMessage, compressing, needsApiKey]);
 
   const handleNewChat = useCallback(() => {
     clearChat();
@@ -524,12 +531,103 @@ export function ChatPanel() {
         </Box>
       )}
 
+      {/* Queued Messages */}
+      {messageQueue.length > 0 && (
+        <Box
+          sx={{
+            px: 2,
+            py: 1,
+            borderTop: 1,
+            borderColor: "divider",
+            backgroundColor: "grey.50",
+            display: "flex",
+            flexDirection: "column",
+            gap: 0.5,
+          }}
+        >
+          <Typography variant="caption" color="text.secondary">
+            Queued messages ({messageQueue.length}):
+          </Typography>
+          {messageQueue.map((msg, index) => (
+            <Box
+              key={index}
+              sx={{
+                display: "flex",
+                alignItems: "center",
+                gap: 0.5,
+              }}
+            >
+              <Chip
+                label={`${index + 1}`}
+                size="small"
+                color="primary"
+                variant="outlined"
+                sx={{ minWidth: 28, height: 22, fontSize: "0.7rem" }}
+              />
+              {editingQueueIndex === index ? (
+                <TextField
+                  value={editingQueueText}
+                  onChange={(e) => setEditingQueueText(e.target.value)}
+                  onBlur={() => {
+                    if (editingQueueText.trim()) {
+                      updateQueuedMessage(index, editingQueueText.trim());
+                    }
+                    setEditingQueueIndex(null);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !e.shiftKey) {
+                      e.preventDefault();
+                      if (editingQueueText.trim()) {
+                        updateQueuedMessage(index, editingQueueText.trim());
+                      }
+                      setEditingQueueIndex(null);
+                    } else if (e.key === "Escape") {
+                      setEditingQueueIndex(null);
+                    }
+                  }}
+                  size="small"
+                  autoFocus
+                  fullWidth
+                  sx={{ "& .MuiInputBase-input": { fontSize: "0.8rem", py: 0.5 } }}
+                />
+              ) : (
+                <Typography
+                  variant="body2"
+                  sx={{
+                    flex: 1,
+                    fontSize: "0.8rem",
+                    cursor: "pointer",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                    "&:hover": { textDecoration: "underline" },
+                  }}
+                  onClick={() => {
+                    setEditingQueueIndex(index);
+                    setEditingQueueText(msg);
+                  }}
+                >
+                  {msg}
+                </Typography>
+              )}
+              <IconButton
+                size="small"
+                onClick={() => removeQueuedMessage(index)}
+                sx={{ p: 0.25 }}
+              >
+                <CloseIcon sx={{ fontSize: 16 }} />
+              </IconButton>
+            </Box>
+          ))}
+        </Box>
+      )}
+
       {/* Input Area */}
       <ChatInput
         value={newPrompt}
         onChange={setNewPrompt}
         onSubmit={handleSubmit}
-        disabled={responding || compressing || !hasMetadata || needsApiKey}
+        disabled={compressing || !hasMetadata || needsApiKey}
         placeholder={
           !hasMetadata
             ? "Load a dandiset first..."
@@ -537,7 +635,9 @@ export function ChatPanel() {
               ? "API key required..."
               : compressing
                 ? "Compressing conversation..."
-                : "Ask about metadata or request changes..."
+                : responding
+                  ? "Type a message to queue it..."
+                  : "Ask about metadata or request changes..."
         }
       />
 

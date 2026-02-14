@@ -142,6 +142,7 @@ const useChat = (options: UseChatOptions) => {
   const [loadingInitialSuggestions, setLoadingInitialSuggestions] = useState<boolean>(false);
   const abortControllerRef = useRef<AbortController | null>(null);
   const initialSuggestionsRequestedForRef = useRef<string | null>(null);
+  const [messageQueue, setMessageQueue] = useState<string[]>([]);
 
   // Fetch DANDI metadata documentation on mount
   useEffect(() => {
@@ -419,6 +420,11 @@ Available tools:
 
   const submitUserMessage = useCallback(
     async (content: string) => {
+      if (responding || compressing) {
+        // Queue the message to be sent after the current response completes
+        setMessageQueue((prev) => [...prev, content]);
+        return;
+      }
       try {
         const userMessage: ChatMessage = { role: "user", content };
         const updatedChat = chatReducer(chat, {
@@ -433,8 +439,25 @@ Available tools:
         );
       }
     },
-    [chat, generateResponse]
+    [chat, generateResponse, responding, compressing]
   );
+
+  // Process queued messages when responding finishes
+  useEffect(() => {
+    if (!responding && !compressing && messageQueue.length > 0) {
+      const [nextMessage, ...rest] = messageQueue;
+      setMessageQueue(rest);
+      submitUserMessage(nextMessage);
+    }
+  }, [responding, compressing, messageQueue, submitUserMessage]);
+
+  const removeQueuedMessage = useCallback((index: number) => {
+    setMessageQueue((prev) => prev.filter((_, i) => i !== index));
+  }, []);
+
+  const updateQueuedMessage = useCallback((index: number, content: string) => {
+    setMessageQueue((prev) => prev.map((msg, i) => i === index ? content : msg));
+  }, []);
 
   const setChatModel = useCallback((newModel: string) => {
     setChat((prev) => chatReducer(prev, { type: "set_model", model: newModel }));
@@ -445,6 +468,7 @@ Available tools:
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
     }
+    setMessageQueue([]);
     setChat(emptyChat);
     setError(null);
     setPartialResponse(null);
@@ -753,6 +777,9 @@ ${plainTextConversation}`;
     tools,
     currentSuggestions,
     loadingInitialSuggestions,
+    messageQueue,
+    removeQueuedMessage,
+    updateQueuedMessage,
   };
 };
 
