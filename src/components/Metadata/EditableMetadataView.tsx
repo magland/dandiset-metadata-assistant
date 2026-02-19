@@ -31,6 +31,7 @@ import LibraryBooksIcon from '@mui/icons-material/LibraryBooks';
 import AccountTreeIcon from '@mui/icons-material/AccountTree';
 import { useMetadataContext } from '../../context/MetadataContext';
 import { computeDelta, deltaToChanges } from '../../core/metadataDiff';
+import type { MetadataOperationType } from '../../core/metadataOperations';
 import { EditableTextField } from './EditableTextField';
 import { EditableKeywordsList } from './EditableKeywordsList';
 import { EditableLicenseSelect, LICENSE_OPTIONS } from './EditableLicenseSelect';
@@ -698,7 +699,7 @@ function SectionDisplay({
   isFieldModified: (key: string) => boolean;
   revertField: (key: string) => void;
   onEditField: (key: string, value: unknown) => { success: boolean; error?: string };
-  modifyMetadata: (operation: string, path: string, value?: unknown) => { success: boolean; error?: string };
+  modifyMetadata: (operation: MetadataOperationType, path: string, value?: unknown) => { success: boolean; error?: string };
 }) {
   const SectionIcon = section.icon;
   
