@@ -83,4 +83,4 @@ export const CHEAP_MODELS = [
   "google/gemini-3-flash-preview"
 ];
 
-export const DEFAULT_MODEL = "google/gemini-2.5-flash";
+export const DEFAULT_MODEL = "google/gemini-3-flash-preview";
