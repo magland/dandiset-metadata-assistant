@@ -6,15 +6,12 @@ import {
   DialogActions,
   Button,
   TextField,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
   Typography,
   Box,
   Alert,
   IconButton,
   InputAdornment,
+  Autocomplete,
 } from "@mui/material";
 import VisibilityIcon from "@mui/icons-material/Visibility";
 import VisibilityOffIcon from "@mui/icons-material/VisibilityOff";
@@ -73,16 +70,21 @@ const ChatSettingsDialog: FunctionComponent<ChatSettingsDialogProps> = ({
       <DialogContent>
         <Box sx={{ display: "flex", flexDirection: "column", gap: 3, pt: 1 }}>
           {/* Model Selection */}
-          <FormControl fullWidth>
-            <InputLabel id="model-select-label">AI Model</InputLabel>
-            <Select
-              labelId="model-select-label"
-              value={currentModel}
-              label="AI Model"
-              onChange={(e) => onModelChange(e.target.value)}
-            >
-              {AVAILABLE_MODELS.map((model) => (
-                <MenuItem key={model.model} value={model.model}>
+          <Autocomplete
+            freeSolo
+            options={AVAILABLE_MODELS.map((m) => m.model)}
+            value={currentModel}
+            onChange={(_e, newValue) => {
+              if (newValue) onModelChange(newValue);
+            }}
+            onInputChange={(_e, newValue, reason) => {
+              if (reason === "input" && newValue) onModelChange(newValue);
+            }}
+            renderOption={(props, option) => {
+              const model = AVAILABLE_MODELS.find((m) => m.model === option);
+              const isCheap = CHEAP_MODELS.includes(option);
+              return (
+                <li {...props} key={option}>
                   <Box
                     sx={{
                       display: "flex",
@@ -91,31 +93,38 @@ const ChatSettingsDialog: FunctionComponent<ChatSettingsDialogProps> = ({
                       alignItems: "center",
                     }}
                   >
-                    <span>{model.label}</span>
+                    <span>{model?.label ?? option}</span>
                     <Typography
                       variant="caption"
                       sx={{
                         ml: 2,
-                        color: CHEAP_MODELS.includes(model.model)
-                          ? "success.main"
-                          : "warning.main",
+                        color: isCheap ? "success.main" : "warning.main",
                       }}
                     >
-                      {CHEAP_MODELS.includes(model.model)
+                      {isCheap
                         ? "Free"
-                        : `$${model.cost.prompt}/$${model.cost.completion} per 1M tokens`}
+                        : model
+                          ? `$${model.cost.prompt}/$${model.cost.completion} per 1M tokens`
+                          : "Custom"}
                     </Typography>
                   </Box>
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
+                </li>
+              );
+            }}
+            renderInput={(params) => (
+              <TextField
+                {...params}
+                label="AI Model"
+                placeholder="Select or type an OpenRouter model ID"
+              />
+            )}
+          />
 
           {/* Model Info */}
           <Alert severity={requiresApiKey ? "warning" : "info"}>
             {requiresApiKey ? (
               <>
-                <strong>{currentModel.split("/")[1]}</strong> requires an
+                <strong>{currentModel.split("/").pop()}</strong> requires an
                 OpenRouter API key. Get one at{" "}
                 <a
                   href="https://openrouter.ai/keys"
@@ -127,7 +136,7 @@ const ChatSettingsDialog: FunctionComponent<ChatSettingsDialogProps> = ({
               </>
             ) : (
               <>
-                <strong>{currentModel.split("/")[1]}</strong> is a free model
+                <strong>{currentModel.split("/").pop()}</strong> is a free model
                 and doesn't require your own API key.
               </>
             )}
