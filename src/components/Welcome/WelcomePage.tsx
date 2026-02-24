@@ -245,7 +245,7 @@ export function WelcomePage({ onDandisetLoaded }: WelcomePageProps) {
               <a href={dandiInstance.webUrl} target="_blank" rel="noopener noreferrer">
                 {dandiInstance.name}
               </a>
-              {' '}and click on your user initials in the top-right corner. An API key is only required to filter by your dandisets and to commit changes.
+              {' '}and click on your user initials in the top-right corner. An API key is only required to save metadata changes back to dandisets that you have write access to.
             </Typography>
           </Box>
         ) : null}
