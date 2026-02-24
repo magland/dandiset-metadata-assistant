@@ -76,15 +76,15 @@ export function ApiKeyManager() {
             Enter your {dandiInstance.name} API key to enable committing changes.
           </Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            You can get your API key from your{' '}
+            To get your API key, log in to{' '}
             <a
-              href={`${dandiInstance.webUrl}/account/settings`}
+              href={dandiInstance.webUrl}
               target="_blank"
               rel="noopener noreferrer"
             >
-              {dandiInstance.name} account settings
+              {dandiInstance.name}
             </a>
-            .
+            {' '}and click on your user initials in the top-right corner.
           </Typography>
           <Box sx={{ display: 'flex', gap: 1, mb: 2 }}>
             <TextField

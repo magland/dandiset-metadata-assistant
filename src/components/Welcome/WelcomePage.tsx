@@ -241,11 +241,11 @@ export function WelcomePage({ onDandisetLoaded }: WelcomePageProps) {
               </Button>
             </Box>
             <Typography variant="caption" color="text.secondary">
-              Get your API key from{' '}
-              <a href={`${dandiInstance.webUrl}/account/settings`} target="_blank" rel="noopener noreferrer">
-                {dandiInstance.name} account settings
+              To get your API key, log in to{' '}
+              <a href={dandiInstance.webUrl} target="_blank" rel="noopener noreferrer">
+                {dandiInstance.name}
               </a>
-              . An API key is only required to filter by your dandisets and to commit changes.
+              {' '}and click on your user initials in the top-right corner. An API key is only required to filter by your dandisets and to commit changes.
             </Typography>
           </Box>
         ) : null}
