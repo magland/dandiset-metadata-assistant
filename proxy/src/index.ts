@@ -4,6 +4,8 @@ import { validateMetadata, formatValidationErrors } from './validation';
 const ALLOWED_ORIGINS = [
   'http://localhost:5173',
   'https://magland.github.io',
+  'https://dandi.github.io',
+  'medit.dandiarchive.org'
 ];
 
 // DANDI API base URL
