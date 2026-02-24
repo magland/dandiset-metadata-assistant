@@ -17,6 +17,7 @@ import {
 } from '../utils/dandiApiKeyStorage';
 import {
   type DandiInstance,
+  getInitialInstance,
   getStoredInstance,
   setStoredInstance,
 } from '../utils/dandiInstances';
@@ -70,10 +71,10 @@ export function MetadataProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
-  const [dandiInstance, setDandiInstanceState] = useState<DandiInstance>(() => getStoredInstance());
+  const [dandiInstance, setDandiInstanceState] = useState<DandiInstance>(() => getInitialInstance());
 
   const [apiKey, setApiKeyState] = useState<string | null>(() => {
-    const instance = getStoredInstance();
+    const instance = getInitialInstance();
     return getStoredDandiApiKey(instance.apiUrl);
   });
 
