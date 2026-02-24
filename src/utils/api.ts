@@ -144,7 +144,7 @@ export interface DandiUser {
 }
 
 export async function verifyApiKey(apiKey: string, dandiApiBase: string): Promise<void> {
-  const url = `${dandiApiBase}/users/search/?search=`;
+  const url = `${dandiApiBase}/users/search/?search=testing`;
   const response = await fetch(url, {
     headers: {
       Authorization: `token ${apiKey}`,
