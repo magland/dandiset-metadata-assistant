@@ -41,7 +41,7 @@ function InfoRow({ icon, label, value }: InfoRowProps) {
 }
 
 export function DandisetInfo() {
-  const { versionInfo, dandisetId } = useMetadataContext();
+  const { versionInfo, dandisetId, dandiInstance } = useMetadataContext();
 
   if (!versionInfo) {
     return null;
@@ -53,7 +53,7 @@ export function DandisetInfo() {
     <Paper variant="outlined" sx={{ p: 2, mb: 2 }}>
       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
         <Link
-          href={`https://dandiarchive.org/dandiset/${dandisetId}`}
+          href={`${dandiInstance.webUrl}/dandiset/${dandisetId}`}
           target="_blank"
           rel="noopener noreferrer"
           underline="hover"
