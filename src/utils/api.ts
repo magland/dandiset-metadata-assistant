@@ -1,4 +1,5 @@
 import type { DandisetVersionInfo } from '../types/dandiset';
+import { DEFAULT_INSTANCE } from './dandiInstances';
 
 export interface OwnedDandiset {
   identifier: string;
@@ -65,7 +66,7 @@ export async function fetchDandisetVersionInfo(
   apiKey?: string | null,
   dandiApiBase?: string
 ): Promise<DandisetVersionInfo> {
-  const base = dandiApiBase || 'https://api.dandiarchive.org/api';
+  const base = dandiApiBase || DEFAULT_INSTANCE.apiUrl;
   const url = `${base}/dandisets/${dandisetId}/versions/${version}/info/`;
 
   const headers: HeadersInit = {};
