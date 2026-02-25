@@ -26,7 +26,7 @@ The DANDI Metadata Assistant is a web application that lets you describe what yo
 
 ### A Real Example
 
-Test can be copy/pasted from any source and the assistant will determine how to update the metadata accordingly. 
+Text can be copy/pasted from any source and the assistant will determine how to update the metadata accordingly. 
 
 The assistant also has access to external sources of information. Given this single prompt:
 
