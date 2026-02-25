@@ -15,6 +15,12 @@ import {
   clearStoredDandiApiKey,
   type StorageType
 } from '../utils/dandiApiKeyStorage';
+import {
+  type DandiInstance,
+  getInitialInstance,
+  getStoredInstance,
+  setStoredInstance,
+} from '../utils/dandiInstances';
 
 interface MetadataContextType {
   // Current dandiset info
@@ -22,21 +28,26 @@ interface MetadataContextType {
   setDandisetId: (id: string) => void;
   version: string;
   setVersion: (version: string) => void;
-  
+
   // Loaded data
   versionInfo: DandisetVersionInfo | null;
   setVersionInfo: (info: DandisetVersionInfo | null) => void;
-  
+
   // Loading state
   isLoading: boolean;
   setIsLoading: (loading: boolean) => void;
   error: string | null;
   setError: (error: string | null) => void;
-  
+
   // API Key
   apiKey: string | null;
   setApiKey: (key: string | null, storageType?: StorageType) => void;
-  
+
+  // DANDI instance
+  dandiInstance: DandiInstance;
+  setDandiInstance: (instance: DandiInstance) => void;
+  dandiApiBase: string;
+
   // Get the current metadata with pending changes applied
   originalMetadata: DandisetMetadata | null;
   modifiedMetadata: DandisetMetadata | null;
@@ -59,9 +70,12 @@ export function MetadataProvider({ children }: { children: ReactNode }) {
   const [originalMetadata, setOriginalMetadata] = useState<DandisetMetadata | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
+
+  const [dandiInstance, setDandiInstanceState] = useState<DandiInstance>(() => getInitialInstance());
+
   const [apiKey, setApiKeyState] = useState<string | null>(() => {
-    // Initialize from storage (checks session first, then local)
-    return getStoredDandiApiKey();
+    const instance = getInitialInstance();
+    return getStoredDandiApiKey(instance.apiUrl);
   });
 
   // Ref to track pending metadata for synchronous validation
@@ -76,11 +90,19 @@ export function MetadataProvider({ children }: { children: ReactNode }) {
 
   const setApiKey = useCallback((key: string | null, storageType: StorageType = 'session') => {
     if (key) {
-      setStoredDandiApiKey(key, storageType);
+      setStoredDandiApiKey(key, storageType, dandiInstance.apiUrl);
     } else {
-      clearStoredDandiApiKey();
+      clearStoredDandiApiKey(dandiInstance.apiUrl);
     }
     setApiKeyState(key);
+  }, [dandiInstance.apiUrl]);
+
+  const setDandiInstance = useCallback((instance: DandiInstance) => {
+    setStoredInstance(instance);
+    setDandiInstanceState(instance);
+    // Load API key for the new instance (clear if none stored)
+    const newApiKey = getStoredDandiApiKey(instance.apiUrl);
+    setApiKeyState(newApiKey);
   }, []);
 
   const modifyMetadata = useCallback((operation: MetadataOperationType, path: string, value?: unknown): ModifyMetadataResult => {
@@ -89,20 +111,20 @@ export function MetadataProvider({ children }: { children: ReactNode }) {
     if (currentMetadata === null) {
       return { success: false, error: 'No metadata loaded' };
     }
-    
+
     const normalizedPath = normalizePath(path);
     const result = applyOperation(currentMetadata, operation, normalizedPath, value);
-    
+
     if (!result.success) {
       return { success: false, error: result.error };
     }
-    
+
     const newMetadata = result.data as DandisetMetadata;
-    
+
     // Only validate if the current metadata (before this change) was valid
     // If it's already invalid, allow changes without validation
     const currentIsValid = validateFullMetadata(currentMetadata).valid;
-    
+
     if (currentIsValid) {
       // Validate against schema
       const validationResult = validateFullMetadata(newMetadata);
@@ -118,10 +140,10 @@ export function MetadataProvider({ children }: { children: ReactNode }) {
         // Schema not loaded yet, allow the change (validation will happen on commit)
       }
     }
-    
+
     modifiedMetadataRef.current = newMetadata;
     setMetadataRefreshCode((code) => code + 1);
-    
+
     return { success: true };
   }, [originalMetadata]);
 
@@ -136,7 +158,7 @@ export function MetadataProvider({ children }: { children: ReactNode }) {
 
     const originalValue = getValueAtPath(originalMetadata, fieldKey);
     const result = applyOperation(currentMetadata, 'set', fieldKey, originalValue);
-    
+
     if (result.success) {
       const newMetadata = result.data as DandisetMetadata;
       modifiedMetadataRef.current = newMetadata;
@@ -170,8 +192,11 @@ export function MetadataProvider({ children }: { children: ReactNode }) {
     revertField,
     apiKey,
     setApiKey,
+    dandiInstance,
+    setDandiInstance,
+    dandiApiBase: dandiInstance.apiUrl,
     originalMetadata,
-    modifiedMetadata : modifiedMetadata || originalMetadata,
+    modifiedMetadata: modifiedMetadata || originalMetadata,
     setOriginalMetadata: setOriginalMetadata1,
     setModifiedMetadata: setModifiedMetadata1,
     clearModifications

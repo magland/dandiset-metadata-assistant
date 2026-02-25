@@ -23,7 +23,8 @@ export function CommitButton({ isReviewMode = false }: CommitButtonProps) {
     setIsLoading,
     originalMetadata,
     modifiedMetadata,
-    clearModifications
+    clearModifications,
+    dandiApiBase,
   } = useMetadataContext();
 
   const [isCommitting, setIsCommitting] = useState(false);
@@ -45,7 +46,7 @@ export function CommitButton({ isReviewMode = false }: CommitButtonProps) {
       }
 
       try {
-        const ownerStatus = await checkUserIsOwner(dandisetId, apiKey);
+        const ownerStatus = await checkUserIsOwner(dandisetId, apiKey, dandiApiBase);
         setIsOwner(ownerStatus);
       } catch (error) {
         console.error('Failed to check ownership:', error);
@@ -66,7 +67,7 @@ export function CommitButton({ isReviewMode = false }: CommitButtonProps) {
 
     try {
       // Commit the changes via the proxy
-      await commitMetadataChanges(dandisetId, version, modifiedMetadata, apiKey);
+      await commitMetadataChanges(dandisetId, version, modifiedMetadata, apiKey, dandiApiBase);
 
       // Success! Clear pending changes
       clearModifications();
@@ -75,7 +76,7 @@ export function CommitButton({ isReviewMode = false }: CommitButtonProps) {
       // Refresh the version info to get the latest state
       setIsLoading(true);
       try {
-        const updatedInfo = await fetchDandisetVersionInfo(dandisetId, version, apiKey);
+        const updatedInfo = await fetchDandisetVersionInfo(dandisetId, version, apiKey, dandiApiBase);
         setVersionInfo(updatedInfo);
       } catch (refreshError) {
         console.warn('Failed to refresh version info after commit:', refreshError);

@@ -1,6 +1,5 @@
 import type { DandisetVersionInfo } from '../types/dandiset';
-
-const DANDI_API_BASE = 'https://api.dandiarchive.org/api';
+import { DEFAULT_INSTANCE } from './dandiInstances';
 
 export interface OwnedDandiset {
   identifier: string;
@@ -30,8 +29,9 @@ export async function fetchDandisets(options: {
   order?: DandisetSortOrder;
   page?: number;
   pageSize?: number;
+  dandiApiBase: string;
 }): Promise<DandisetsPage> {
-  const { apiKey, onlyMine = false, order = '-modified', page = 1, pageSize = 25 } = options;
+  const { apiKey, onlyMine = false, order = '-modified', page = 1, pageSize = 25, dandiApiBase } = options;
   const params = new URLSearchParams({
     order,
     page: String(page),
@@ -47,7 +47,7 @@ export async function fetchDandisets(options: {
     headers['Authorization'] = `token ${apiKey}`;
   }
 
-  const response = await fetch(`${DANDI_API_BASE}/dandisets/?${params}`, { headers });
+  const response = await fetch(`${dandiApiBase}/dandisets/?${params}`, { headers });
 
   if (!response.ok) {
     if (response.status === 401) {
@@ -63,24 +63,26 @@ export async function fetchDandisets(options: {
 export async function fetchDandisetVersionInfo(
   dandisetId: string,
   version: string,
-  apiKey?: string | null
+  apiKey?: string | null,
+  dandiApiBase?: string
 ): Promise<DandisetVersionInfo> {
-  const url = `${DANDI_API_BASE}/dandisets/${dandisetId}/versions/${version}/info/`;
-  
+  const base = dandiApiBase || DEFAULT_INSTANCE.apiUrl;
+  const url = `${base}/dandisets/${dandisetId}/versions/${version}/info/`;
+
   const headers: HeadersInit = {};
   if (apiKey) {
     headers['Authorization'] = `token ${apiKey}`;
   }
-  
+
   const response = await fetch(url, { headers });
-  
+
   if (!response.ok) {
     if (response.status === 404) {
       throw new Error(`Dandiset ${dandisetId} version ${version} not found`);
     }
     throw new Error(`Failed to fetch dandiset info: ${response.statusText}`);
   }
-  
+
   const data = await response.json();
   return data as DandisetVersionInfo;
 }
@@ -93,7 +95,8 @@ export async function commitMetadataChanges(
   dandisetId: string,
   version: string,
   metadata: unknown,
-  apiKey: string
+  apiKey: string,
+  instanceUrl?: string
 ): Promise<void> {
   const url = `${PROXY_URL}/commit`;
 
@@ -107,23 +110,24 @@ export async function commitMetadataChanges(
       version,
       metadata,
       apiKey,
+      instanceUrl,
     }),
   });
 
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({}));
-    
+
     if (errorData.validationErrors) {
       throw new Error(`Metadata validation failed: ${errorData.message || 'Invalid metadata'}`);
     }
-    
+
     if (response.status === 401 || response.status === 403) {
       throw new Error('Authentication failed. Please check your API key.');
     }
-    
+
     throw new Error(
-      errorData.message || 
-      errorData.error || 
+      errorData.message ||
+      errorData.error ||
       `Failed to commit metadata: ${response.statusText}`
     );
   }
@@ -139,12 +143,27 @@ export interface DandiUser {
   status: string;
 }
 
+export async function verifyApiKey(apiKey: string, dandiApiBase: string): Promise<void> {
+  const url = `${dandiApiBase}/users/search/?search=testing`;
+  const response = await fetch(url, {
+    headers: {
+      Authorization: `token ${apiKey}`,
+    },
+  });
+  if (!response.ok) {
+    if (response.status === 401 || response.status === 403) {
+      throw new Error('Invalid API key');
+    }
+    throw new Error(`Authentication check failed: ${response.statusText}`);
+  }
+}
+
 export interface DandisetOwner {
   username: string;
 }
 
-export async function fetchCurrentUser(apiKey: string): Promise<DandiUser> {
-  const url = `${DANDI_API_BASE}/users/me/`;
+export async function fetchCurrentUser(apiKey: string, dandiApiBase: string): Promise<DandiUser> {
+  const url = `${dandiApiBase}/users/me/`;
 
   const response = await fetch(url, {
     headers: {
@@ -165,9 +184,10 @@ export async function fetchCurrentUser(apiKey: string): Promise<DandiUser> {
 
 export async function fetchDandisetOwners(
   dandisetId: string,
-  apiKey: string
+  apiKey: string,
+  dandiApiBase: string
 ): Promise<DandisetOwner[]> {
-  const url = `${DANDI_API_BASE}/dandisets/${dandisetId}/users/`;
+  const url = `${dandiApiBase}/dandisets/${dandisetId}/users/`;
 
   const response = await fetch(url, {
     headers: {
@@ -191,12 +211,13 @@ export async function fetchDandisetOwners(
 
 export async function checkUserIsOwner(
   dandisetId: string,
-  apiKey: string
+  apiKey: string,
+  dandiApiBase: string
 ): Promise<boolean> {
   try {
     const [currentUser, owners] = await Promise.all([
-      fetchCurrentUser(apiKey),
-      fetchDandisetOwners(dandisetId, apiKey),
+      fetchCurrentUser(apiKey, dandiApiBase),
+      fetchDandisetOwners(dandisetId, apiKey, dandiApiBase),
     ]);
 
     return owners.some((owner) => owner.username === currentUser.username);

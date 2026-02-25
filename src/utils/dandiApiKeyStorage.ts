@@ -1,20 +1,21 @@
-const DANDI_API_KEY_STORAGE_KEY = "dandi-api-key";
-
 export type StorageType = "session" | "local";
 
+function storageKey(instanceApiUrl: string): string {
+  return `dandi-api-key::${instanceApiUrl}`;
+}
+
 /**
- * Gets the stored DANDI API key.
+ * Gets the stored DANDI API key for the given instance.
  * Checks session storage first, then falls back to local storage.
  */
-export const getStoredDandiApiKey = (): string | null => {
+export const getStoredDandiApiKey = (instanceApiUrl: string): string | null => {
   try {
-    // Check session storage first
-    const sessionKey = sessionStorage.getItem(DANDI_API_KEY_STORAGE_KEY);
+    const key = storageKey(instanceApiUrl);
+    const sessionKey = sessionStorage.getItem(key);
     if (sessionKey) {
       return sessionKey;
     }
-    // Fall back to local storage
-    return localStorage.getItem(DANDI_API_KEY_STORAGE_KEY);
+    return localStorage.getItem(key);
   } catch (error) {
     console.error("Error reading DANDI API key from storage:", error);
     return null;
@@ -22,21 +23,18 @@ export const getStoredDandiApiKey = (): string | null => {
 };
 
 /**
- * Saves the DANDI API key to the specified storage type.
+ * Saves the DANDI API key for the given instance to the specified storage type.
  * When saving to one storage type, clears the key from the other type.
  */
-export const setStoredDandiApiKey = (apiKey: string, storageType: StorageType): void => {
+export const setStoredDandiApiKey = (apiKey: string, storageType: StorageType, instanceApiUrl: string): void => {
   try {
+    const key = storageKey(instanceApiUrl);
     if (storageType === "session") {
-      // Save to session storage
-      sessionStorage.setItem(DANDI_API_KEY_STORAGE_KEY, apiKey);
-      // Clear from local storage
-      localStorage.removeItem(DANDI_API_KEY_STORAGE_KEY);
+      sessionStorage.setItem(key, apiKey);
+      localStorage.removeItem(key);
     } else {
-      // Save to local storage
-      localStorage.setItem(DANDI_API_KEY_STORAGE_KEY, apiKey);
-      // Clear from session storage
-      sessionStorage.removeItem(DANDI_API_KEY_STORAGE_KEY);
+      localStorage.setItem(key, apiKey);
+      sessionStorage.removeItem(key);
     }
   } catch (error) {
     console.error(`Error saving DANDI API key to ${storageType} storage:`, error);
@@ -44,27 +42,29 @@ export const setStoredDandiApiKey = (apiKey: string, storageType: StorageType): 
 };
 
 /**
- * Clears the DANDI API key from both session and local storage.
+ * Clears the DANDI API key for the given instance from both session and local storage.
  */
-export const clearStoredDandiApiKey = (): void => {
+export const clearStoredDandiApiKey = (instanceApiUrl: string): void => {
   try {
-    sessionStorage.removeItem(DANDI_API_KEY_STORAGE_KEY);
-    localStorage.removeItem(DANDI_API_KEY_STORAGE_KEY);
+    const key = storageKey(instanceApiUrl);
+    sessionStorage.removeItem(key);
+    localStorage.removeItem(key);
   } catch (error) {
     console.error("Error clearing DANDI API key from storage:", error);
   }
 };
 
 /**
- * Gets the current storage type where the API key is stored.
+ * Gets the current storage type where the API key is stored for the given instance.
  * Returns null if no key is stored.
  */
-export const getCurrentStorageType = (): StorageType | null => {
+export const getCurrentStorageType = (instanceApiUrl: string): StorageType | null => {
   try {
-    if (sessionStorage.getItem(DANDI_API_KEY_STORAGE_KEY)) {
+    const key = storageKey(instanceApiUrl);
+    if (sessionStorage.getItem(key)) {
       return "session";
     }
-    if (localStorage.getItem(DANDI_API_KEY_STORAGE_KEY)) {
+    if (localStorage.getItem(key)) {
       return "local";
     }
     return null;

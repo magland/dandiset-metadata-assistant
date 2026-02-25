@@ -11,6 +11,7 @@ import { MetadataPanel } from './components/Metadata/MetadataPanel';
 import { WelcomePage } from './components/Welcome/WelcomePage';
 import { DandisetIndicator } from './components/Controls/DandisetIndicator';
 import { ApiKeyManager } from './components/Controls/ApiKeyManager';
+import { InstanceSelector } from './components/Controls/InstanceSelector';
 import AboutDialog from './components/About/AboutDialog';
 import { fetchDandisetVersionInfo } from './utils/api';
 import {
@@ -102,6 +103,7 @@ function AppContent() {
     setError,
     clearModifications,
     apiKey,
+    dandiApiBase,
     setOriginalMetadata,
     setModifiedMetadata
   } = useMetadataContext();
@@ -192,7 +194,7 @@ function AppContent() {
         setIsLoading(true);
         setError(null);
         try {
-          const info = await fetchDandisetVersionInfo(urlDandisetId, 'draft', apiKey);
+          const info = await fetchDandisetVersionInfo(urlDandisetId, 'draft', apiKey, dandiApiBase);
           setVersionInfo(info);
           setVersion('draft');
         } catch (err) {
@@ -258,7 +260,8 @@ function AppContent() {
             >
               <InfoIcon />
             </IconButton>
-              <Box sx={{ flexShrink: 0 }}>
+              <Box sx={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: 1 }}>
+              <InstanceSelector />
               <IconButton
                 color="inherit"
                 component="a"
@@ -341,7 +344,8 @@ function AppContent() {
           >
             <InfoIcon />
           </IconButton>
-          <Box sx={{ flexShrink: 0 }}>          
+          <Box sx={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: 1 }}>
+            <InstanceSelector />
             <IconButton
               color="inherit"
               component="a"

@@ -11,6 +11,8 @@ import {
   Typography,
   Chip,
   Tooltip,
+  CircularProgress,
+  Alert,
 } from '@mui/material';
 import KeyIcon from '@mui/icons-material/Key';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
@@ -20,18 +22,23 @@ import VisibilityOffIcon from '@mui/icons-material/VisibilityOff';
 import { useMetadataContext } from '../../context/MetadataContext';
 import { getCurrentStorageType, type StorageType } from '../../utils/dandiApiKeyStorage';
 import { ApiKeyPersistCheckbox } from './ApiKeyPersistCheckbox';
+import { verifyApiKey } from '../../utils/api';
 
 export function ApiKeyManager() {
-  const { apiKey, setApiKey } = useMetadataContext();
+  const { apiKey, setApiKey, dandiInstance } = useMetadataContext();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [localApiKey, setLocalApiKey] = useState('');
-  const [persistKey, setPersistKey] = useState(getCurrentStorageType());
+  const [persistKey, setPersistKey] = useState(() => getCurrentStorageType(dandiInstance.apiUrl));
   const [showKey, setShowKey] = useState(false);
+  const [isVerifying, setIsVerifying] = useState(false);
+  const [keyError, setKeyError] = useState<string | null>(null);
 
   const hasApiKey = !!apiKey;
 
   const handleOpen = () => {
     setLocalApiKey(apiKey || '');
+    setPersistKey(getCurrentStorageType(dandiInstance.apiUrl));
+    setKeyError(null);
     setIsDialogOpen(true);
   };
 
@@ -39,12 +46,28 @@ export function ApiKeyManager() {
     setIsDialogOpen(false);
     setLocalApiKey('');
     setShowKey(false);
+    setKeyError(null);
   };
 
-  const handleSave = () => {
-    const storageType: StorageType = persistKey ? 'local' : 'session';
-    setApiKey(localApiKey.trim() || null, storageType);
-    handleClose();
+  const handleSave = async () => {
+    const trimmed = localApiKey.trim();
+    if (!trimmed) {
+      setApiKey(null);
+      handleClose();
+      return;
+    }
+    setIsVerifying(true);
+    setKeyError(null);
+    try {
+      await verifyApiKey(trimmed, dandiInstance.apiUrl);
+      const storageType: StorageType = persistKey ? 'local' : 'session';
+      setApiKey(trimmed, storageType);
+      handleClose();
+    } catch (err) {
+      setKeyError(err instanceof Error ? err.message : 'Authentication failed');
+    } finally {
+      setIsVerifying(false);
+    }
   };
 
   const handleClear = () => {
@@ -68,22 +91,22 @@ export function ApiKeyManager() {
       <Dialog open={isDialogOpen} onClose={handleClose} maxWidth="sm" fullWidth>
         <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
           <KeyIcon />
-          DANDI API Key
+          {dandiInstance.name} API Key
         </DialogTitle>
         <DialogContent>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            Enter your DANDI API key to enable committing changes.
+            Enter your {dandiInstance.name} API key to enable committing changes.
           </Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            You can get your API key from your{' '}
+            To get your API key, log in to{' '}
             <a
-              href="https://dandiarchive.org/account/settings"
+              href={dandiInstance.webUrl}
               target="_blank"
               rel="noopener noreferrer"
             >
-              DANDI account settings
+              {dandiInstance.name}
             </a>
-            .
+            {' '}and click on your user initials in the top-right corner.
           </Typography>
           <Box sx={{ display: 'flex', gap: 1, mb: 2 }}>
             <TextField
@@ -92,7 +115,7 @@ export function ApiKeyManager() {
               type={showKey ? 'text' : 'password'}
               value={localApiKey}
               onChange={(e) => setLocalApiKey(e.target.value)}
-              placeholder="Enter your DANDI API key"
+              placeholder={`Enter your ${dandiInstance.name} API key`}
               autoComplete="off"
             />
             <IconButton onClick={() => setShowKey(!showKey)}>
@@ -103,6 +126,9 @@ export function ApiKeyManager() {
             checked={persistKey === 'local'}
             onChange={(checked) => setPersistKey(checked ? 'local' : 'session')}
           />
+          {keyError && (
+            <Alert severity="error" sx={{ mt: 1 }}>{keyError}</Alert>
+          )}
         </DialogContent>
         <DialogActions>
           {hasApiKey && (
@@ -111,9 +137,9 @@ export function ApiKeyManager() {
             </Button>
           )}
           <Box sx={{ flex: 1 }} />
-          <Button onClick={handleClose}>Cancel</Button>
-          <Button onClick={handleSave} variant="contained">
-            Save
+          <Button onClick={handleClose} disabled={isVerifying}>Cancel</Button>
+          <Button onClick={handleSave} variant="contained" disabled={isVerifying}>
+            {isVerifying ? <CircularProgress size={20} /> : 'Save'}
           </Button>
         </DialogActions>
       </Dialog>

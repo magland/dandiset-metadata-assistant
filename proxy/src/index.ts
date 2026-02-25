@@ -6,8 +6,15 @@ const ALLOWED_ORIGINS = [
   'https://magland.github.io',
 ];
 
-// DANDI API base URL
+// Default DANDI API base URL (production)
 const DANDI_API_BASE = 'https://api.dandiarchive.org/api';
+
+// Whitelist of allowed DANDI instance URLs
+const ALLOWED_INSTANCE_URLS = [
+  'https://api.dandiarchive.org/api',
+  'https://api.sandbox.dandiarchive.org/api',
+  'https://api-dandi.emberarchive.org/api',
+];
 
 /**
  * Request body interface for commit endpoint
@@ -17,6 +24,7 @@ interface CommitRequest {
   version: string;
   metadata: any;
   apiKey: string;
+  instanceUrl?: string;
 }
 
 /**
@@ -75,7 +83,12 @@ async function handleCommit(request: Request): Promise<Response> {
   try {
     // Parse request body
     const body: CommitRequest = await request.json();
-    const { dandisetId, version, metadata, apiKey } = body;
+    const { dandisetId, version, metadata, apiKey, instanceUrl } = body;
+
+    // Resolve DANDI API base: use instanceUrl if provided and whitelisted
+    const dandiApiBase = instanceUrl && ALLOWED_INSTANCE_URLS.includes(instanceUrl)
+      ? instanceUrl
+      : DANDI_API_BASE;
     
     // Validate required fields
     if (!dandisetId || !version || !metadata || !apiKey) {
@@ -124,7 +137,7 @@ async function handleCommit(request: Request): Promise<Response> {
     }
     
     // Forward to DANDI API
-    const dandiUrl = `${DANDI_API_BASE}/dandisets/${dandisetId}/versions/${version}/`;
+    const dandiUrl = `${dandiApiBase}/dandisets/${dandisetId}/versions/${version}/`;
     
     const dandiResponse = await fetch(dandiUrl, {
       method: 'PUT',
