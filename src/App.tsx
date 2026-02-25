@@ -265,7 +265,7 @@ function AppContent() {
               <IconButton
                 color="inherit"
                 component="a"
-                href="https://github.com/dandi/dandiset-metadata-assistant"
+                href="https://github.com/dandi/dandi-medit"
                 target="_blank"
                 rel="noopener noreferrer"
                 size="small"
@@ -349,7 +349,7 @@ function AppContent() {
             <IconButton
               color="inherit"
               component="a"
-              href="https://github.com/dandi/dandiset-metadata-assistant"
+              href="https://github.com/dandi/dandi-medit"
               target="_blank"
               rel="noopener noreferrer"
               size="small"

@@ -52,7 +52,7 @@ const AboutDialog: FunctionComponent<AboutDialogProps> = ({ open, onClose }) => 
           {/* GitHub Link */}
           <Box>
             <Link
-              href="https://github.com/dandi/dandiset-metadata-assistant"
+              href="https://github.com/dandi/dandi-medit"
               target="_blank"
               rel="noopener noreferrer"
               sx={{
