@@ -18,7 +18,6 @@ import {
 import {
   type DandiInstance,
   getInitialInstance,
-  getStoredInstance,
   setStoredInstance,
 } from '../utils/dandiInstances';
 
